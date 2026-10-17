@@ -21,11 +21,6 @@ export function TextField({ label, name, error, hint, ...inputProps }: TextField
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      {hint && (
-        <p id={hintId} className="text-sm text-muted">
-          {hint}
-        </p>
-      )}
       <input
         id={id}
         name={name}
@@ -34,6 +29,12 @@ export function TextField({ label, name, error, hint, ...inputProps }: TextField
         className="rounded-lg border border-border bg-surface px-3 py-2.5 text-base aria-invalid:border-danger"
         {...inputProps}
       />
+      {/* Below the input, so fields with and without a hint stay aligned side by side. */}
+      {hint && (
+        <p id={hintId} className="text-sm text-muted">
+          {hint}
+        </p>
+      )}
       {error && (
         <p id={errorId} className="text-sm text-danger">
           {error}

@@ -17,19 +17,32 @@ services:
       timeout: 3s
       retries: 20
 
-  # Production-like container built from the Dockerfile.
-  # Start with: docker compose --profile app up --build
-  app:
+  # Production-like stack built from the Dockerfile:
+  #   docker compose --profile app up --build
+  # Migrations run first as a one-off job, like a release step on a container platform.
+  migrate:
     profiles: ["app"]
-    build: .
+    build:
+      context: .
+      target: migrate
     environment:
       DATABASE_URL: postgresql://app:app@db:5432/event_booking
-      SITE_URL: http://localhost:3000
-    ports:
-      - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      target: runner
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/event_booking
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   db-data:
