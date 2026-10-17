@@ -1,0 +1,149 @@
+// Multi-tenant event booking.
+// Every tenant-owned row carries organizationId, and every read in
+// src/server/repositories takes an organizationId, so queries are always tenant-scoped.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  // CommonJS output: the default ESM output uses import.meta.url, which Jest cannot load.
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  venues   Venue[]
+  events   Event[]
+  bookings Booking[]
+
+  @@map("organizations")
+}
+
+model Venue {
+  id             String @id @default(cuid())
+  organizationId String
+  name           String
+  address        String
+  city           String
+  country        String @db.Char(2)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       Event[]
+
+  @@index([organizationId])
+  @@map("venues")
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+model Event {
+  id                 String      @id @default(cuid())
+  organizationId     String
+  venueId            String
+  slug               String
+  title              String
+  summary            String
+  description        String
+  startsAt           DateTime
+  endsAt             DateTime
+  status             EventStatus @default(DRAFT)
+  currency           String      @default("JPY") @db.Char(3)
+  maxSeatsPerBooking Int         @default(6)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  venue        Venue        @relation(fields: [venueId], references: [id])
+  sections     Section[]
+  seats        Seat[]
+  bookings     Booking[]
+
+  // Slugs are unique per tenant, not globally: two organizers can both have "summer-live".
+  @@unique([organizationId, slug])
+  @@index([organizationId, status, startsAt])
+  @@map("events")
+}
+
+model Section {
+  id         String @id @default(cuid())
+  eventId    String
+  name       String
+  // Price in the currency's minor unit. JPY has no minor unit, so 1 = ¥1.
+  priceMinor Int
+  sortOrder  Int    @default(0)
+
+  event Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  seats Seat[]
+
+  @@unique([eventId, name])
+  @@map("sections")
+}
+
+model Seat {
+  id        String @id @default(cuid())
+  eventId   String
+  sectionId String
+  row       String
+  number    Int
+
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  section      Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  bookingSeats BookingSeat[]
+
+  @@unique([sectionId, row, number])
+  @@index([eventId])
+  @@map("seats")
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  organizationId String
+  eventId        String
+  reference      String        @unique
+  customerName   String
+  customerEmail  String
+  status         BookingStatus @default(CONFIRMED)
+  totalMinor     Int
+  // Copied at booking time, so a cancelled booking still shows what was bought.
+  seatLabels     String[]
+  createdAt      DateTime      @default(now())
+  cancelledAt    DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  seats        BookingSeat[]
+
+  @@index([organizationId, eventId])
+  @@map("bookings")
+}
+
+// One row per seat held by an active booking.
+// The unique constraint on seatId is what makes double booking impossible,
+// even when two requests race: the second INSERT fails inside its transaction.
+// Cancelling a booking deletes its rows, which releases the seats.
+model BookingSeat {
+  bookingId String
+  seatId    String @unique
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seat    Seat    @relation(fields: [seatId], references: [id], onDelete: Cascade)
+
+  @@id([bookingId, seatId])
+  @@map("booking_seats")
+}
