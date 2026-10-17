@@ -1,6 +1,8 @@
 /**
  * Demo data: two organizers (tenants), each with its own venue and events.
  * Dates are relative to "now", so the seeded events are always upcoming.
+ * IDs are fixed, so re-seeding behind a running server (as the E2E tests do)
+ * does not leave cached pages pointing at deleted rows.
  *
  * Run with: npm run db:seed  (wipes all data in DATABASE_URL first)
  */
@@ -35,6 +37,7 @@ async function createEvent(
   const startsAt = new Date(Math.ceil(Date.now() / DAY) * DAY + input.startsInDays * DAY + 10 * 60 * 60 * 1000);
   const event = await db.event.create({
     data: {
+      id: `evt_${input.slug}`,
       organizationId: input.organizationId,
       venueId: input.venueId,
       slug: input.slug,
@@ -49,11 +52,12 @@ async function createEvent(
 
   for (const [sortOrder, spec] of input.sections.entries()) {
     const section = await db.section.create({
-      data: { eventId: event.id, name: spec.name, priceMinor: spec.priceMinor, sortOrder },
+      data: { id: `${event.id}_${spec.name}`, eventId: event.id, name: spec.name, priceMinor: spec.priceMinor, sortOrder },
     });
     await db.seat.createMany({
       data: spec.rows.flatMap((row) =>
         Array.from({ length: spec.seatsPerRow }, (_, i) => ({
+          id: `${section.id}_${row}${i + 1}`,
           eventId: event.id,
           sectionId: section.id,
           row,
@@ -92,9 +96,10 @@ async function main() {
     "TRUNCATE booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
   );
 
-  const harbor = await db.organization.create({ data: { slug: "harbor-hall", name: "Harbor Hall Live" } });
+  const harbor = await db.organization.create({ data: { id: "org_harbor-hall", slug: "harbor-hall", name: "Harbor Hall Live" } });
   const harborVenue = await db.venue.create({
     data: {
+      id: "venue_harbor-hall",
       organizationId: harbor.id,
       name: "Harbor Hall",
       address: "2-1 Kaigan-dori, Naka-ku",
@@ -150,9 +155,10 @@ async function main() {
     sections: [{ name: "Floor", priceMinor: 12000, rows: ROWS("A", 2), seatsPerRow: 8 }],
   });
 
-  const kyoto = await db.organization.create({ data: { slug: "kyoto-chamber", name: "Kyoto Chamber Orchestra" } });
+  const kyoto = await db.organization.create({ data: { id: "org_kyoto-chamber", slug: "kyoto-chamber", name: "Kyoto Chamber Orchestra" } });
   const kyotoVenue = await db.venue.create({
     data: {
+      id: "venue_okazaki",
       organizationId: kyoto.id,
       name: "Okazaki Concert Hall",
       address: "13 Okazaki Saishoji-cho, Sakyo-ku",

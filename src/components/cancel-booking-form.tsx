@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import type { CancelFormState } from "@/app/[org]/bookings/[reference]/actions";
 import { buttonClasses } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { submitWithoutReset } from "@/lib/submit-without-reset";
 
 type CancelBookingFormProps = {
   action: (state: CancelFormState, formData: FormData) => Promise<CancelFormState>;
@@ -13,7 +14,8 @@ export function CancelBookingForm({ action }: CancelBookingFormProps) {
   const [state, formAction, pending] = useActionState(action, { status: "idle" });
 
   return (
-    <form action={formAction} className="flex flex-col gap-4" noValidate>
+    // Keeps the typed email when the action returns an error.
+    <form action={formAction} onSubmit={submitWithoutReset(formAction)} className="flex flex-col gap-4" noValidate>
       <TextField
         label="Email used for the booking"
         name="customerEmail"

@@ -6,6 +6,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { formatMoney } from "@/lib/money";
 import { groupSeatsByRow } from "@/lib/seats";
+import { submitWithoutReset } from "@/lib/submit-without-reset";
 import type { SeatMap } from "@/server/repositories/events";
 
 type BookingFormProps = {
@@ -52,9 +53,13 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
   const seatError = state.fieldErrors?.seatIds;
 
   return (
-    <form action={formAction} className="flex flex-col gap-8" noValidate>
+    // Without the reset guard, a failed submit would uncheck the seat checkboxes
+    // while `selected` still holds them, and the next submit would send no seats.
+    <form action={formAction} onSubmit={submitWithoutReset(formAction)} className="flex flex-col gap-8" noValidate>
       <fieldset
-        className="flex flex-col gap-6"
+        // Fieldsets default to min-inline-size: min-content, so without min-w-0 a wide
+        // seat row stretches the whole page on phones instead of scrolling inside its box.
+        className="flex min-w-0 flex-col gap-6"
         aria-describedby={seatError ? "seat-error" : "seat-hint"}
       >
         <legend className="mb-2 text-xl font-semibold">Choose your seats</legend>
@@ -142,9 +147,8 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
           label="Full name"
           name="customerName"
           autoComplete="name"
+          // Only used without JavaScript, when the page re-renders after a submit.
           defaultValue={state.values?.customerName}
-          // A new key re-mounts the field so defaultValue applies after each submit.
-          key={`name-${state.values?.customerName ?? ""}`}
           error={state.fieldErrors?.customerName}
           required
         />
@@ -155,7 +159,6 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
           autoComplete="email"
           hint="Needed to manage or cancel your booking."
           defaultValue={state.values?.customerEmail}
-          key={`email-${state.values?.customerEmail ?? ""}`}
           error={state.fieldErrors?.customerEmail}
           required
         />
