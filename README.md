@@ -5,6 +5,10 @@ Each organizer (tenant) gets its own event pages; visitors pick seats on a live 
 and the booking is confirmed immediately. **Two people can never book the same seat**,
 even when they click at the same moment.
 
+**Live demo: [event-booking-saas.vercel.app](https://event-booking-saas.vercel.app)** ·
+API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/openapi.json)
+(demo data, reset every Monday; use any made-up name and email)
+
 ![Event page with seat map](docs/event-page-desktop.png)
 
 <details>
