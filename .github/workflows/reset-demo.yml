@@ -1,0 +1,29 @@
+name: Reset demo data
+
+# The public demo is re-seeded every Monday: seed dates are relative to "now", so the
+# events stay upcoming, and bookings made by visitors are cleared.
+on:
+  schedule:
+    - cron: "0 0 * * 1" # Mondays 00:00 UTC (09:00 JST)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reseed:
+    runs-on: ubuntu-latest
+    # Skips forks and repositories without the secret instead of failing.
+    if: ${{ vars.DEMO_RESET_ENABLED == 'true' }}
+    env:
+      # Direct (unpooled) connection string of the demo database, stored as a repository secret.
+      DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run db:seed

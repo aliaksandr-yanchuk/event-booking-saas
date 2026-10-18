@@ -180,6 +180,18 @@ In CI, the E2E tests run against the production build (`node .next/standalone/se
 4. **Stale cache after re-seeding.** Re-seeding behind a running server left cached pages
    pointing at deleted rows. The seed now uses fixed IDs.
 
+## Deployment
+
+The demo runs on **Vercel** (app) with **Neon** (serverless PostgreSQL); the same
+code also runs as the Docker image on any container platform.
+
+- `vercel-build` applies pending migrations (`prisma migrate deploy`) before `next build`.
+- The app connects through Neon's pooled URL (`DATABASE_URL`); the Prisma CLI uses the
+  direct URL (`DATABASE_URL_UNPOOLED`), because migrations need a non-pooled connection.
+- Canonical URLs and preview images use `SITE_URL`, or Vercel's production domain if unset.
+- A scheduled workflow ([`reset-demo.yml`](.github/workflows/reset-demo.yml)) re-seeds the
+  demo database every Monday, so the events stay upcoming and visitor bookings are cleared.
+
 ## Running locally
 
 Requirements: Node.js 24 (`nvm use`), Docker.
