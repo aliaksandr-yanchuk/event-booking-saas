@@ -32,7 +32,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description: event.summary,
     alternates: { canonical: path },
     openGraph: { type: "website", title, description: event.summary, url: path },
-    twitter: { card: "summary", title, description: event.summary },
+    // The image itself comes from opengraph-image.tsx; Next.js adds og:image automatically,
+    // and X falls back to og:image. "summary_large_image" shows it as a full-width card.
+    twitter: { card: "summary_large_image", title, description: event.summary },
   };
 }
 

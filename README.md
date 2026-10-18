@@ -22,7 +22,7 @@ even when they click at the same moment.
 | Concurrency | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests |
 | REST API | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
 | Frontend | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript |
-| SEO | Per-event metadata, canonical URLs, Open Graph, schema.org `Event` JSON-LD, sitemap and robots |
+| SEO | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots |
 | Testing | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile |
 | Delivery | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI |
 
@@ -138,6 +138,13 @@ another tenant's event by editing the request.
 **Forms work without JavaScript.** Seats are real `<input type="checkbox">` elements styled
 as seat tiles, so keyboard use, screen readers and plain HTML form posts work out of the
 box. Errors are connected to their fields with `aria-describedby` and `aria-invalid`.
+
+**Shared links get a preview image.** [`opengraph-image.tsx`](src/app/[org]/events/[event]/opengraph-image.tsx)
+draws a 1200×630 card per event with `ImageResponse` (JSX rendered to PNG), and Next.js
+adds the `og:image` / `twitter:image` tags to the page. The card only shows details that
+rarely change; platforms cache previews for days, so "seats left" would quickly be wrong.
+
+![Generated Open Graph image](docs/og-image-example.png)
 
 **Booking pages are private.** Booking references come from a CSPRNG (31⁸ combinations),
 the confirmation page is `noindex` and does not show the email address, and cancelling

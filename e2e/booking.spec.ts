@@ -86,6 +86,21 @@ test("event pages expose structured data and a canonical URL", async ({ page }) 
   );
 });
 
+test("event pages have a generated Open Graph image for link previews", async ({ page }) => {
+  await page.goto("/kyoto-chamber/events/autumn-strings");
+  await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute("content", "summary_large_image");
+
+  // The tag holds an absolute URL built from SITE_URL; request its path from the test server.
+  const imageUrl = new URL((await page.locator('meta[property="og:image"]').getAttribute("content"))!);
+  const image = await page.request.get(imageUrl.pathname + imageUrl.search);
+
+  expect(image.status()).toBe(200);
+  expect(image.headers()["content-type"]).toBe("image/png");
+  // A PNG stores its width and height as 32-bit integers at bytes 16–23 (IHDR chunk).
+  const png = await image.body();
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
+});
+
 test("cancelled events stay visible but cannot be booked", async ({ page }) => {
   await page.goto("/kyoto-chamber/events/new-year-concert");
 
