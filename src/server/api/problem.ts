@@ -1,20 +1,15 @@
+import type { z } from "zod";
+import { jsonResponse, Problem, type PROBLEM_CODES } from "@/server/api/schemas";
+
 /**
  * Error responses in the RFC 9457 "Problem Details" format, so every API error
  * has the same shape: a machine-readable `code`, a human-readable `detail`,
  * and optional extra members such as field errors.
  * https://www.rfc-editor.org/rfc/rfc9457
  */
-export type ProblemCode =
-  | "VALIDATION_FAILED"
-  | "INVALID_JSON"
-  | "UNSUPPORTED_MEDIA_TYPE"
-  | "NOT_FOUND"
-  | "SEATS_TAKEN"
-  | "TOO_MANY_SEATS"
-  | "INVALID_SEATS"
-  | "EVENT_NOT_BOOKABLE"
-  | "ALREADY_CANCELLED"
-  | "EVENT_STARTED";
+export type ProblemCode = (typeof PROBLEM_CODES)[number];
+
+type ProblemExtras = Pick<z.output<typeof Problem>, "errors" | "takenSeatIds" | "limit">;
 
 const TITLES: Record<ProblemCode, string> = {
   VALIDATION_FAILED: "The request body is invalid",
@@ -29,14 +24,10 @@ const TITLES: Record<ProblemCode, string> = {
   EVENT_STARTED: "The event has already started",
 };
 
-export function problem(
-  status: number,
-  code: ProblemCode,
-  detail?: string,
-  extra: Record<string, unknown> = {},
-): Response {
-  return Response.json(
-    { type: `about:blank#${code}`, title: TITLES[code], status, code, ...(detail && { detail }), ...extra },
+export function problem(status: number, code: ProblemCode, detail?: string, extras: ProblemExtras = {}): Response {
+  return jsonResponse(
+    Problem,
+    { type: `about:blank#${code}`, title: TITLES[code], status, code, ...(detail && { detail }), ...extras },
     { status, headers: { "Content-Type": "application/problem+json" } },
   );
 }

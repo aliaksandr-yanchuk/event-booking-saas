@@ -1,4 +1,5 @@
 import { resolveEvent } from "@/server/api/resolve";
+import { EventDetailResponse, jsonResponse } from "@/server/api/schemas";
 import { toEventDetail } from "@/server/api/serializers";
 import { getSeatMap } from "@/server/queries";
 
@@ -11,7 +12,8 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/v1/organiza
   }
 
   const seatMap = await getSeatMap(resolved.event.id);
-  return Response.json(
+  return jsonResponse(
+    EventDetailResponse,
     { data: toEventDetail(resolved.event, seatMap) },
     // Availability changes with every booking, so this response must not be cached.
     { headers: { "Cache-Control": "no-store" } },

@@ -1,14 +1,10 @@
 import { revalidateTag } from "next/cache";
-import { z } from "zod";
 import { problem, readJson } from "@/server/api/problem";
+import { BookingCancelledResponse, CancelBookingRequest, jsonResponse } from "@/server/api/schemas";
 import { cancelBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
 import { getOrganization } from "@/server/queries";
-
-const bodySchema = z.object({
-  customerEmail: z.string().trim().pipe(z.email("Enter the email address used for the booking.")),
-});
 
 /**
  * POST /api/v1/organizations/{org}/bookings/{reference}/cancel
@@ -27,10 +23,10 @@ export async function POST(
   if (!json.ok) {
     return json.response;
   }
-  const body = bodySchema.safeParse(json.body);
+  const body = CancelBookingRequest.safeParse(json.body);
   if (!body.success) {
     return problem(400, "VALIDATION_FAILED", undefined, {
-      errors: { customerEmail: body.error.issues[0]?.message },
+      errors: { customerEmail: body.error.issues[0]?.message ?? "Invalid value." },
     });
   }
 
@@ -58,5 +54,5 @@ export async function POST(
   }
 
   revalidateTag(cacheTags.eventAvailability(result.eventId), { expire: 0 });
-  return Response.json({ data: { reference, status: "cancelled" } });
+  return jsonResponse(BookingCancelledResponse, { data: { reference, status: "cancelled" } });
 }

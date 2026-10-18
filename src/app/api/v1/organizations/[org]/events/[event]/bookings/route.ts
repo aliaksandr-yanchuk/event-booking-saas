@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { parseBookingInput } from "@/lib/booking-input";
 import { problem, readJson } from "@/server/api/problem";
 import { resolveEvent } from "@/server/api/resolve";
+import { BookingCreatedResponse, jsonResponse } from "@/server/api/schemas";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
@@ -65,7 +66,8 @@ export async function POST(
   revalidateTag(cacheTags.eventAvailability(event.id), { expire: 0 });
 
   const location = `/api/v1/organizations/${organization.slug}/bookings/${result.reference}`;
-  return Response.json(
+  return jsonResponse(
+    BookingCreatedResponse,
     {
       data: {
         reference: result.reference,

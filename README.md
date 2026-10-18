@@ -70,8 +70,19 @@ both behave the same.
 ## REST API
 
 Base path `/api/v1`. The full description is served as OpenAPI 3.1 at
-[`/api/v1/openapi.json`](src/app/api/v1/openapi.json/route.ts); its booking request
-schema is generated from the same Zod schema the server validates with.
+[`/api/v1/openapi.json`](src/app/api/v1/openapi.json/route.ts).
+
+**One contract, defined once.** Every request and response body is a Zod schema in
+[`src/server/api/schemas.ts`](src/server/api/schemas.ts), and that single definition is
+used in three places, so the documentation cannot drift from the code:
+
+1. **TypeScript:** serializers and route handlers must return exactly the schema's
+   shape (`jsonResponse(EventDetailResponse, …)`). Adding an undocumented field, for
+   example the customer's email, is a compile error.
+2. **OpenAPI:** the document's component schemas are generated from the same schemas
+   (`z.toJSONSchema`), requests in "input" mode and responses in "output" mode.
+3. **Contract tests:** the API tests parse every real response with its schema. The
+   response schemas are strict, so a missing, renamed or extra field fails the test.
 
 | Method | Path | Success | Errors |
 | --- | --- | --- | --- |

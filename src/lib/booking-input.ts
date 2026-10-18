@@ -12,6 +12,9 @@ export const bookingInputSchema = z.object({
     .max(80, "Use 80 characters or fewer."),
   customerEmail: z
     .string()
+    // Trimmed before the email check, so " aiko@example.com " is accepted. The meta
+    // documents the format in OpenAPI, where only the pre-pipe input side is shown.
+    .meta({ format: "email" })
     .trim()
     .toLowerCase()
     .pipe(z.email("Enter a valid email address, like name@example.com.")),

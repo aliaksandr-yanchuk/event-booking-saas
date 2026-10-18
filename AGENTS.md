@@ -34,8 +34,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Route handlers stay thin: parse and validate, call the same service or repository
   functions the pages use, and map typed results to status codes. No business rules here.
 - Errors go through `problem()` (RFC 9457) with a stable `code`; never return ad-hoc error JSON.
-- Responses are built by the serializers in `src/server/api/serializers.ts`, never by
-  returning Prisma rows directly. Breaking changes need a new version prefix.
+- Every request and response body has a Zod schema in `src/server/api/schemas.ts`,
+  registered in `requestSchemas` or `responseSchemas` (that is what puts it in OpenAPI).
+  Response schemas use `z.strictObject`.
+- Return responses with `jsonResponse(Schema, body)`, built by the serializers in
+  `src/server/api/serializers.ts`; never return Prisma rows directly.
+- A new endpoint needs its path in `src/server/api/openapi.ts` and an API test that
+  parses the response with its schema. Breaking changes need a new version prefix.
 - Route handlers cannot call `updateTag`; invalidate with `revalidateTag(tag, { expire: 0 })`.
 
 ### Verification

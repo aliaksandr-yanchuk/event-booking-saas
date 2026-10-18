@@ -1,4 +1,5 @@
 import { problem } from "@/server/api/problem";
+import { EventListResponse, jsonResponse } from "@/server/api/schemas";
 import { toEventSummary } from "@/server/api/serializers";
 import { getOrganization, getUpcomingEvents } from "@/server/queries";
 
@@ -11,7 +12,8 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/v1/organiza
   }
 
   const events = await getUpcomingEvents(organization.id);
-  return Response.json(
+  return jsonResponse(
+    EventListResponse,
     {
       organizer: { slug: organization.slug, name: organization.name },
       data: events.map((event) => toEventSummary(event, organization.slug)),

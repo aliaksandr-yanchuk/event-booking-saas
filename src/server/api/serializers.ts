@@ -1,9 +1,12 @@
+import type { z } from "zod";
+import type { BookingDetailsResponse, EventDetail, EventSummary } from "@/server/api/schemas";
+import type { BookingDetails } from "@/server/repositories/bookings";
 import type { PublicEvent, SeatMap } from "@/server/repositories/events";
 
 /**
- * API response shapes. These are the public contract, kept separate from the
- * database models so a schema change does not silently change the API.
- * Prices are integers in the currency's minor unit, with the currency alongside.
+ * Convert database read models into the public API shapes defined in schemas.ts.
+ * The return types come from the Zod schemas, so these functions cannot drift
+ * from the documented contract without a type error.
  */
 
 type EventListItem = {
@@ -16,7 +19,7 @@ type EventListItem = {
   sections: { priceMinor: number }[];
 };
 
-export function toEventSummary(event: EventListItem, organizationSlug: string) {
+export function toEventSummary(event: EventListItem, organizationSlug: string): z.output<typeof EventSummary> {
   const prices = event.sections.map((section) => section.priceMinor);
   return {
     slug: event.slug,
@@ -31,7 +34,7 @@ export function toEventSummary(event: EventListItem, organizationSlug: string) {
   };
 }
 
-export function toEventDetail(event: PublicEvent, seatMap: SeatMap) {
+export function toEventDetail(event: PublicEvent, seatMap: SeatMap): z.output<typeof EventDetail> {
   const seatsLeft = seatMap.reduce(
     (count, section) => count + section.seats.filter((seat) => !seat.taken).length,
     0,
@@ -41,7 +44,8 @@ export function toEventDetail(event: PublicEvent, seatMap: SeatMap) {
     title: event.title,
     summary: event.summary,
     description: event.description,
-    status: event.status.toLowerCase(),
+    // Drafts never reach the API (findPublicEvent filters them out).
+    status: event.status === "CANCELLED" ? "cancelled" : "published",
     startsAt: event.startsAt.toISOString(),
     endsAt: event.endsAt.toISOString(),
     currency: event.currency,
@@ -59,5 +63,24 @@ export function toEventDetail(event: PublicEvent, seatMap: SeatMap) {
         available: !seat.taken,
       })),
     })),
+  };
+}
+
+export function toBookingDetails(booking: BookingDetails): z.output<typeof BookingDetailsResponse>["data"] {
+  return {
+    reference: booking.reference,
+    status: booking.status === "CANCELLED" ? "cancelled" : "confirmed",
+    customerName: booking.customerName,
+    seats: booking.seatLabels,
+    totalMinor: booking.totalMinor,
+    currency: booking.event.currency,
+    createdAt: booking.createdAt.toISOString(),
+    cancelledAt: booking.cancelledAt?.toISOString() ?? null,
+    event: {
+      slug: booking.event.slug,
+      title: booking.event.title,
+      startsAt: booking.event.startsAt.toISOString(),
+      venue: booking.event.venue,
+    },
   };
 }
