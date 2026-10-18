@@ -30,6 +30,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Forms keep `action={dispatch}` (works without JavaScript) and use
   `submitWithoutReset` for `onSubmit`, so errors do not wipe user input.
 
+### REST API (`src/app/api/v1`)
+- Route handlers stay thin: parse and validate, call the same service or repository
+  functions the pages use, and map typed results to status codes. No business rules here.
+- Errors go through `problem()` (RFC 9457) with a stable `code`; never return ad-hoc error JSON.
+- Responses are built by the serializers in `src/server/api/serializers.ts`, never by
+  returning Prisma rows directly. Breaking changes need a new version prefix.
+- Route handlers cannot call `updateTag`; invalidate with `revalidateTag(tag, { expire: 0 })`.
+
 ### Verification
 - Prove behavior with a test at the right level: pure logic → unit test,
   database guarantees → integration test, user flows → Playwright.

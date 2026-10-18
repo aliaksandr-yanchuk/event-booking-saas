@@ -9,7 +9,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: isCI,
-  retries: isCI ? 1 : 0,
+  // No retries: a retried test would find its seats already booked, and retries
+  // would hide real flakiness instead of surfacing it.
+  retries: 0,
   reporter: isCI ? [["github"], ["html", { open: "never" }]] : "list",
   globalSetup: "./e2e/global-setup.ts",
   use: {
@@ -17,8 +19,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    // REST API contract tests: HTTP only, no browser.
+    { name: "api", testMatch: /api\.spec\.ts/ },
+    { name: "desktop", testIgnore: /api\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", testIgnore: /api\.spec\.ts/, use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
     // CI tests the production build; locally the dev server is faster to start.

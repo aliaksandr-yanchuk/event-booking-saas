@@ -169,7 +169,7 @@ describe("cancelBooking", () => {
       customerEmail: " AIKO@example.com ",
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, eventId: event.id });
     expect(await db.booking.findUnique({ where: { reference } })).toMatchObject({ status: "CANCELLED" });
 
     const rebooked = await createBooking(db, {

@@ -84,7 +84,7 @@ async function BookingDetails({ params }: Pick<Props, "params">) {
           </h2>
           <p className="text-sm text-muted">Cancel before the event starts and your seats go back on sale.</p>
           <CancelBookingForm
-            action={cancelBookingAction.bind(null, organization.slug, booking.reference, booking.eventId)}
+            action={cancelBookingAction.bind(null, organization.slug, booking.reference)}
           />
         </section>
       )}

@@ -14,7 +14,6 @@ const emailSchema = z.string().trim().pipe(z.email("Enter the email address you 
 export async function cancelBookingAction(
   orgSlug: string,
   reference: string,
-  eventId: string,
   _previous: CancelFormState,
   formData: FormData,
 ): Promise<CancelFormState> {
@@ -44,7 +43,7 @@ export async function cancelBookingAction(
     return { status: "error", message: messages[result.code] };
   }
 
-  updateTag(cacheTags.eventAvailability(eventId));
+  updateTag(cacheTags.eventAvailability(result.eventId));
   // Re-render the page so it shows the cancelled state.
   refresh();
   return { status: "idle" };

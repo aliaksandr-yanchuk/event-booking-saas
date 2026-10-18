@@ -20,6 +20,7 @@ even when they click at the same moment.
 | --- | --- |
 | Backend & data modeling | PostgreSQL schema with Prisma 7, tenant-scoped repositories, transactional booking service with typed results |
 | Concurrency | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests |
+| REST API | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
 | Frontend | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript |
 | SEO | Per-event metadata, canonical URLs, Open Graph, schema.org `Event` JSON-LD, sitemap and robots |
 | Testing | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile |
@@ -40,14 +41,22 @@ even when they click at the same moment.
 flowchart LR
   Browser -->|"GET pages"| Pages["Server Components<br/>(src/app)"]
   Browser -->|"form submit"| Actions["Server Actions<br/>(actions.ts)"]
+  Client["API clients"] -->|"JSON over HTTP"| API["REST API<br/>src/app/api/v1"]
   Pages --> Queries["Cached reads<br/>src/server/queries.ts<br/>'use cache' + cacheTag"]
   Pages -->|"seat map, never cached"| Repos
+  API --> Queries
+  API --> Service
   Queries --> Repos["Repositories<br/>src/server/repositories"]
   Actions --> Service["Booking service<br/>src/server/booking-service.ts"]
   Actions -->|"updateTag after a booking"| Queries
   Repos --> DB[(PostgreSQL)]
   Service -->|"transaction"| DB
 ```
+
+The web pages and the REST API are two entry points into the same service layer:
+the pages use Server Components and Server Actions, while other clients (a mobile app,
+a partner integration) use the JSON API. Booking rules live only in the service, so
+both behave the same.
 
 - **Pages** are Server Components. Each page prerenders a static shell, and the
   data-dependent parts stream in through `<Suspense>`. The build needs no database.
@@ -57,6 +66,46 @@ flowchart LR
   After a booking, `updateTag` invalidates the count. The seat map itself is never cached.
 - **Server Actions** validate input with Zod, call the booking service, and map its
   typed results (`SEATS_TAKEN`, `TOO_MANY_SEATS`, …) to messages for the form.
+
+## REST API
+
+Base path `/api/v1`. The full description is served as OpenAPI 3.1 at
+[`/api/v1/openapi.json`](src/app/api/v1/openapi.json/route.ts); its booking request
+schema is generated from the same Zod schema the server validates with.
+
+| Method | Path | Success | Errors |
+| --- | --- | --- | --- |
+| GET | `/organizations/{org}/events` | 200, cacheable for 60 s | 404 |
+| GET | `/organizations/{org}/events/{event}` | 200 with live seat map, `no-store` | 404 |
+| POST | `/organizations/{org}/events/{event}/bookings` | 201 + `Location` | 400, 404, 409, 415, 422 |
+| GET | `/organizations/{org}/bookings/{reference}` | 200 (no email in the response) | 404 |
+| POST | `/organizations/{org}/bookings/{reference}/cancel` | 200 | 400, 404, 409, 422 |
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/organizations/harbor-hall/events/midnight-jazz-session/bookings \
+  -H 'Content-Type: application/json' \
+  -d '{"customerName":"Aiko Tanaka","customerEmail":"aiko@example.com","seatIds":["evt_midnight-jazz-session_Floor_D1"]}'
+```
+
+Errors use the RFC 9457 Problem Details format with a stable `code`, so clients can
+branch on the code rather than on the message text:
+
+```json
+{
+  "type": "about:blank#SEATS_TAKEN",
+  "title": "Some seats are already booked",
+  "status": 409,
+  "code": "SEATS_TAKEN",
+  "detail": "Another customer booked these seats first.",
+  "takenSeatIds": ["evt_midnight-jazz-session_Floor_D1"]
+}
+```
+
+Status codes follow the usual split: **400** the body is not valid (with per-field
+`errors`), **409** a conflict with the current state (seat taken, already cancelled),
+**422** a valid request that breaks a booking rule (too many seats, event closed).
+Cancellation is `POST …/cancel` rather than `DELETE`, because it needs a body (the email
+as a second factor) and the booking is kept with status `cancelled`, not deleted.
 
 ## Design decisions
 
@@ -93,6 +142,7 @@ needs the email as well as the reference.
 | Unit | `npm test` | Pricing, validation, booking references, JSON-LD, the booking form component |
 | Integration | `npm run test:integration` | Booking service against PostgreSQL: race condition, tenant isolation, cancellation, booking rules |
 | E2E | `npm run test:e2e` | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport |
+| API | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation |
 
 CI runs all three on every pull request, plus lint, type check and a Docker build.
 In CI, the E2E tests run against the production build (`node .next/standalone/server.js`).
@@ -145,6 +195,8 @@ docker compose --profile app up --build
 ```
 prisma/                  schema, migrations, demo seed
 src/app/                 routes (pages, Server Actions, sitemap, robots, health check)
+src/app/api/v1/          REST API route handlers + OpenAPI document
+src/server/api/          Problem Details responses and API serializers
 src/components/          booking form, cancel form, UI primitives
 src/lib/                 pure functions (money, dates, validation, JSON-LD) + unit tests
 src/server/              database client, repositories, booking service, cached queries

@@ -103,7 +103,8 @@ export async function createBooking(
 }
 
 export type CancelBookingResult =
-  | { ok: true }
+  // eventId lets callers invalidate that event's cached availability.
+  | { ok: true; eventId: string }
   | { ok: false; code: "NOT_FOUND" | "ALREADY_CANCELLED" | "EVENT_STARTED" };
 
 /**
@@ -124,7 +125,7 @@ export async function cancelBooking(
         reference: command.reference,
         customerEmail: command.customerEmail.trim().toLowerCase(),
       },
-      select: { id: true, status: true, event: { select: { startsAt: true } } },
+      select: { id: true, eventId: true, status: true, event: { select: { startsAt: true } } },
     });
     if (!booking) return { ok: false, code: "NOT_FOUND" };
     if (booking.status === "CANCELLED") return { ok: false, code: "ALREADY_CANCELLED" };
@@ -135,7 +136,7 @@ export async function cancelBooking(
       where: { id: booking.id },
       data: { status: "CANCELLED", cancelledAt: now },
     });
-    return { ok: true };
+    return { ok: true, eventId: booking.eventId };
   });
 }
 

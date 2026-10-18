@@ -6,7 +6,6 @@ export async function findBookingByReference(db: Db, organizationId: string, ref
     // The email is deliberately not selected: anyone with the link can see this page.
     select: {
       reference: true,
-      eventId: true,
       customerName: true,
       status: true,
       totalMinor: true,

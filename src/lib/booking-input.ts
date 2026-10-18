@@ -29,11 +29,16 @@ export type BookingInput = z.infer<typeof bookingInputSchema>;
 export type BookingFieldErrors = Partial<Record<keyof BookingInput, string>>;
 
 export function parseBookingForm(formData: FormData) {
-  const result = bookingInputSchema.safeParse({
+  return parseBookingInput({
     customerName: formData.get("customerName") ?? "",
     customerEmail: formData.get("customerEmail") ?? "",
     seatIds: formData.getAll("seatIds").map(String),
   });
+}
+
+/** Validates booking input from any source (form or JSON API) into one message per field. */
+export function parseBookingInput(input: unknown) {
+  const result = bookingInputSchema.safeParse(input);
 
   if (result.success) {
     return { success: true as const, data: result.data };
