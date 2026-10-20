@@ -3,11 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CancelBookingForm } from "@/components/cancel-booking-form";
+import { TicketQr } from "@/components/ticket-qr";
 import { buttonClasses } from "@/components/ui/button";
 import { isBookingReference } from "@/lib/booking-reference";
 import { effectiveStatus, type BookingStatusValue } from "@/lib/booking-status";
 import { formatEventDate, formatEventTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
+import { absoluteUrl } from "@/lib/site";
 import { db } from "@/server/db";
 import { findBookingByReference } from "@/server/repositories/bookings";
 import { getOrganization } from "@/server/queries";
@@ -99,6 +101,20 @@ async function BookingDetails({ params }: Pick<Props, "params">) {
               Continue to payment
             </button>
           </form>
+        </section>
+      )}
+
+      {status === "CONFIRMED" && (
+        <section aria-labelledby="ticket-heading" className="flex flex-col items-start gap-3">
+          <h2 id="ticket-heading" className="text-xl font-semibold">
+            Your ticket
+          </h2>
+          <p className="text-sm text-muted">Show this code at the door, or tell the staff your reference.</p>
+          <TicketQr
+            url={absoluteUrl(`/dashboard/${organization.slug}/check-in?ref=${booking.reference}`)}
+            label={`Ticket QR code for booking ${booking.reference}`}
+          />
+          {booking.checkedInAt && <p className="text-sm font-medium">Checked in. Enjoy the show!</p>}
         </section>
       )}
 

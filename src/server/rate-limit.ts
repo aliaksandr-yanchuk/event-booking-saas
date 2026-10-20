@@ -20,6 +20,9 @@ export const rateLimits = {
   // Cancelling needs the booking's email. This stops guessing it for a known
   // reference, even from many addresses.
   cancelPerBooking: { limit: 5, windowMs: 60 * MINUTE },
+  // Password guessing: per address, and per account from any number of addresses.
+  loginPerClient: { limit: 10, windowMs: 10 * MINUTE },
+  loginPerAccount: { limit: 5, windowMs: 15 * MINUTE },
 } satisfies Record<string, RateLimitRule>;
 
 export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number };
@@ -81,6 +84,38 @@ export async function limitCancellation(
     `cancel:booking:${booking.organizationId}:${booking.reference}`,
     rateLimits.cancelPerBooking,
   );
+}
+
+/**
+ * Before checking a password: every attempt counts per address, but per account only
+ * failures count (see recordFailedLogin). Otherwise everyone signing in to the shared
+ * demo accounts would use up their limit.
+ */
+export async function limitLogin(headers: Headers, email: string, db: Db = defaultDb): Promise<RateLimitResult> {
+  const perClient = await consumeRateLimit(db, `login:client:${clientAddress(headers)}`, rateLimits.loginPerClient);
+  if (!perClient.allowed) {
+    return perClient;
+  }
+  return peekRateLimit(db, `login:account:${email}`, rateLimits.loginPerAccount);
+}
+
+export async function recordFailedLogin(email: string, db: Db = defaultDb) {
+  await consumeRateLimit(db, `login:account:${email}`, rateLimits.loginPerAccount);
+}
+
+/** Whether `key` is over the limit, without counting a hit. */
+export async function peekRateLimit(
+  db: Db,
+  key: string,
+  rule: RateLimitRule,
+  now = new Date(),
+): Promise<RateLimitResult> {
+  const row = await db.rateLimit.findUnique({ where: { key }, select: { count: true, windowStart: true } });
+  const remainingMs = row ? row.windowStart.getTime() + rule.windowMs - now.getTime() : 0;
+  if (!row || remainingMs <= 0 || row.count < rule.limit) {
+    return { allowed: true };
+  }
+  return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
 }
 
 /** "Try again in 3 minutes." for the forms. */

@@ -29,6 +29,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   idempotency key.
 - Tests use `createFakePayments()`; E2E runs against the demo checkout, never Stripe.
 
+### Dashboard and auth
+
+- Every dashboard page, Server Action and route handler calls `requireMembership()` (or
+  `getCurrentUser()` in route handlers) from `src/server/auth/dal.ts`. Never rely on the
+  layout or `src/proxy.ts` for authorization.
+- Dashboard queries take the organization ID from the membership, never from the URL.
+- Owner-only data (revenue, customer emails, CSV) is checked on the server, not only hidden.
+
 ### Caching
 
 - Cached reads live in `src/server/queries.ts` (`"use cache"` + `cacheLife` + `cacheTag`).

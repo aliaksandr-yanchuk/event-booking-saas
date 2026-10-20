@@ -175,7 +175,7 @@ describe("BookingForm", () => {
     const email = await screen.findByLabelText("Email");
     expect(email).toHaveAttribute("aria-invalid", "true");
     expect(email).toHaveAccessibleDescription(
-      "Needed to manage or cancel your booking. Enter a valid email address, like name@example.com.",
+      "Needed to manage or cancel your booking. This is a demo, so a made-up address is fine. Enter a valid email address, like name@example.com.",
     );
   });
 });

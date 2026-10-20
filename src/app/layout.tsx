@@ -32,9 +32,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Skip to content
         </a>
         <header className="border-b border-border bg-surface">
-          <div className="mx-auto flex h-14 max-w-5xl items-center px-4">
+          <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
             <Link href="/" className="text-lg font-semibold tracking-tight">
               {SITE_NAME}
+            </Link>
+            {/* A plain link, so the header stays static; the dashboard checks the session. */}
+            <Link href="/dashboard" className="text-sm font-medium text-muted hover:text-foreground">
+              For organizers
             </Link>
           </div>
         </header>

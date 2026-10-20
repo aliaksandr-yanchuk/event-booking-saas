@@ -8,6 +8,8 @@
  */
 import "dotenv/config";
 import { generateBookingReference } from "../src/lib/booking-reference";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "../src/lib/demo-accounts";
+import { hashPassword } from "../src/server/auth/password";
 import { createDb, type Db } from "../src/server/db";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -100,7 +102,7 @@ async function main() {
   const db = createDb(url);
 
   await db.$executeRawUnsafe(
-    "TRUNCATE rate_limits, idempotency_keys, booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
+    "TRUNCATE sessions, memberships, users, rate_limits, idempotency_keys, booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
   );
 
   const harbor = await db.organization.create({
@@ -224,7 +226,21 @@ async function main() {
     sections: [{ name: "Hall", priceMinor: 0, rows: ROWS("A", 3), seatsPerRow: 12 }],
   });
 
-  console.log("Seeded 2 organizers and 6 events.");
+  // Organizer accounts (see the login page). One hash for all: same password.
+  const passwordHash = await hashPassword(DEMO_PASSWORD);
+  for (const account of DEMO_ACCOUNTS) {
+    await db.user.create({
+      data: {
+        id: `user_${account.email.split("@")[0]}_${account.organizationSlug}`,
+        email: account.email,
+        name: account.name,
+        passwordHash,
+        memberships: { create: { organizationId: `org_${account.organizationSlug}`, role: account.role } },
+      },
+    });
+  }
+
+  console.log(`Seeded 2 organizers, 6 events and ${DEMO_ACCOUNTS.length} organizer accounts.`);
   await db.$disconnect();
 }
 

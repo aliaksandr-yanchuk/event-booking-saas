@@ -204,7 +204,7 @@ export function BookingForm({
           name="customerEmail"
           type="email"
           autoComplete="email"
-          hint="Needed to manage or cancel your booking."
+          hint="Needed to manage or cancel your booking. This is a demo, so a made-up address is fine."
           defaultValue={state.values?.customerEmail}
           error={state.fieldErrors?.customerEmail}
           required

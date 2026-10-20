@@ -235,3 +235,40 @@ modified body. `getStripe()` refuses keys that are not test-mode keys.
 
 **Consequences.** A breaking change in Stripe's API shows up when stripe-mock's pinned
 version is updated, not on the day Stripe ships it.
+
+## 22. Own sessions and passwords, kept small (2026-10-20)
+
+**Context.** The dashboard needs sign-in for a handful of organizer accounts. No sign-up,
+no social login, no email yet.
+
+**Decision.** Email and password, scrypt from `node:crypto`, and database sessions: a
+random token in an `httpOnly`, `SameSite=Lax`, `__Host-` cookie, stored as a SHA-256 hash.
+Server Actions already reject cross-site posts (Next.js compares `Origin` with the host).
+
+**Rejected.** Auth.js or Better Auth: both would bring their own user and organization
+tables next to the existing `organizations`, and most of their features (OAuth, magic
+links) are not needed here. Stateless signed cookies: signing out could not end a session
+on the server.
+
+**Consequences.** Password reset and invitations are out of scope; accounts come from the
+seed. With sign-up, the next step would be a library rather than more code here.
+
+## 23. Authorization in a data access layer, the proxy only as a shortcut (2026-10-20)
+
+**Decision.** `requireMembership()` runs in every dashboard page, Server Action and route
+handler and returns the organization the user belongs to; queries are scoped to its ID.
+The proxy redirects requests without a session cookie, without touching the database.
+
+**Rejected.** Checking in the dashboard layout: layouts do not re-render on navigation,
+and a Server Action can be called without its page. Checking only in the proxy: it runs
+for every request and prefetch, and a cookie's presence says nothing about its validity.
+
+**Consequences.** The session check reads the current time, so it calls `connection()`:
+otherwise Partial Prefetching would try to put it into a per-session App Shell, and Next.js
+refuses the current time in a prerender.
+
+## 24. Two roles, with the difference enforced on the server (2026-10-20)
+
+**Decision.** `OWNER` sees revenue, customer emails and the CSV export; `STAFF` sees the
+guest list without emails and checks guests in. The CSV route returns 403 for staff, not
+just a hidden button. The CSV defuses spreadsheet formulas in customer-supplied text.

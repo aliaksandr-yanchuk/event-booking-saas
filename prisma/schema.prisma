@@ -23,6 +23,7 @@ model Organization {
   events          Event[]
   bookings        Booking[]
   idempotencyKeys IdempotencyKey[]
+  memberships     Membership[]
 
   @@map("organizations")
 }
@@ -148,6 +149,11 @@ model Booking {
   paidAt            DateTime?
   refundedAt        DateTime?
 
+  // Door check-in by the organizer's staff.
+  checkedInAt   DateTime?
+  checkedInById String?
+  checkedInBy   User?     @relation(fields: [checkedInById], references: [id], onDelete: SetNull)
+
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   seats          BookingSeat[]
@@ -203,4 +209,58 @@ model RateLimit {
   count       Int
 
   @@map("rate_limits")
+}
+
+// ---- Organizer accounts ----
+
+model User {
+  id           String   @id @default(cuid())
+  // Stored lowercased, so "Owner@…" and "owner@…" are the same account.
+  email        String   @unique
+  name         String
+  // scrypt, with its parameters and salt in the string (see src/server/auth/password.ts).
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  memberships Membership[]
+  sessions    Session[]
+  checkIns    Booking[]
+
+  @@map("users")
+}
+
+enum MemberRole {
+  // Everything: sales, customer emails, CSV export, check-in.
+  OWNER
+  // Door staff: the booking list without emails, and check-in.
+  STAFF
+}
+
+// Which organizers a user works for. Every dashboard query starts from a membership.
+model Membership {
+  userId         String
+  organizationId String
+  role           MemberRole
+  createdAt      DateTime   @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+// Database sessions. The cookie holds a random token; only its SHA-256 is stored, so a
+// leaked database cannot be used to sign in.
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
 }

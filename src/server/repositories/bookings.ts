@@ -17,6 +17,7 @@ export async function findBookingByReference(db: Db, organizationId: string, ref
       checkoutUrl: true,
       paidAt: true,
       refundedAt: true,
+      checkedInAt: true,
       event: {
         select: {
           slug: true,

@@ -10,7 +10,8 @@ never book the same seat**, even when they click at the same moment.
 
 **Live demo: [event-booking-saas.vercel.app](https://event-booking-saas.vercel.app)** ·
 API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/openapi.json)
-(demo data, reset every Monday; use any made-up name and email)
+(demo data, reset every Monday; use any made-up name and email) ·
+Organizer dashboard: [`/login`](https://event-booking-saas.vercel.app/login), demo accounts listed there
 
 ![Event page with seat map](docs/event-page-desktop.png)
 
@@ -23,16 +24,17 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 
 ## What it shows
 
-| Area                    | In this project                                                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Backend & data modeling | PostgreSQL schema with Prisma 7, tenant-scoped repositories, transactional booking service with typed results                       |
-| Concurrency             | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests                             |
-| Payments                | Seat holds that expire, a checkout behind a provider interface, idempotent payment confirmation, late payments and refunds          |
-| REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
-| Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript            |
-| SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                     |
-| Testing                 | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile, automated WCAG checks        |
-| Delivery                | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI                                                           |
+| Area                    | In this project                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Backend & data modeling | PostgreSQL schema with Prisma 7, tenant-scoped repositories, transactional booking service with typed results                        |
+| Concurrency             | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests                              |
+| Auth & roles            | Organizer dashboard with database sessions, scrypt passwords, owner and door-staff roles checked in a data access layer, QR check-in |
+| Payments                | Seat holds that expire, a checkout behind a provider interface, idempotent payment confirmation, late payments and refunds           |
+| REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema  |
+| Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript             |
+| SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                      |
+| Testing                 | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile, automated WCAG checks         |
+| Delivery                | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI                                                            |
 
 ## Tech stack
 
@@ -226,6 +228,28 @@ rarely change; platforms cache previews for days, so "seats left" would quickly 
 
 ![Generated Open Graph image](docs/og-image-example.png)
 
+**Organizers get a dashboard, and roles are checked next to the data.** Owners see sales
+per event, revenue, every booking with the customer's email, and a CSV export; door staff
+see the guest list without emails and can check guests in. Every page, Server Action and
+route handler calls the data access layer ([`dal.ts`](src/server/auth/dal.ts)), which
+turns the session cookie into a user and the URL's organizer into a membership, and every
+dashboard query takes the organizer ID from that membership, never from the URL. A user
+who is not a member gets the same 404 as for an organizer that does not exist.
+[`proxy.ts`](src/proxy.ts) only redirects requests without a session cookie to the login
+page; it reads no database, because it runs before every request, prefetches included.
+Customers' booking pages show a QR code that opens the check-in page for that booking, so
+staff scan tickets with a phone camera; checking in is conditional on "not checked in
+yet", so one ticket cannot be let in twice.
+
+**Sessions are rows, not signed cookies.** The cookie holds 256 random bits; the database
+stores only their SHA-256, and signing out deletes the row, which ends the session on the
+server at once (a test puts the old cookie back after signing out and is refused).
+Passwords are hashed with scrypt from Node's standard library. A login with an unknown
+email still runs a hash, so response times do not reveal which accounts exist. Failed
+logins are rate-limited per account and every attempt per address; successful ones do not
+count per account, because everyone shares the demo accounts. The `next` parameter only
+accepts dashboard paths, so the login page cannot be used as an open redirect.
+
 **Booking pages are private.** Booking references come from a CSPRNG (31⁸ combinations),
 the confirmation page is `noindex` and does not show the email address, and cancelling
 needs the email as well as the reference.
@@ -340,11 +364,16 @@ docker compose --profile app up --build
 ```
 prisma/                  schema, migrations, demo seed
 src/app/                 routes (pages, Server Actions, sitemap, robots, health check)
+src/app/dashboard/       organizer dashboard (events, bookings, CSV export, check-in)
+src/app/checkout/demo/   the demo checkout used without Stripe keys
 src/app/api/v1/          REST API route handlers + OpenAPI document
 src/server/api/          Problem Details responses and API serializers
 src/components/          booking form, cancel form, UI primitives
 src/lib/                 pure functions (money, dates, validation, JSON-LD) + unit tests
-src/server/              database client, repositories, booking service, cached queries
+src/server/              database client, repositories, booking and payment services, cached queries
+src/server/auth/         passwords, sessions, data access layer
+src/server/payments/     payment provider interface, Stripe and demo providers, webhook handling
+src/proxy.ts             redirects requests without a session cookie to the login page
 test/integration/        database test setup and factories
 e2e/                     Playwright tests
 ```
@@ -359,5 +388,4 @@ the test suites, not by assuming the generated code was correct.
 
 ## Possible next steps
 
-- Organizer dashboard with authentication (sales per event, booking list, check-in)
 - Email confirmation with a signed management link

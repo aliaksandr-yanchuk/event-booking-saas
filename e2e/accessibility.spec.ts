@@ -87,3 +87,23 @@ test("not found page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await expectNoViolations(page);
 });
+
+test("login page and the organizer dashboard", async ({ page }) => {
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "Organizer sign-in" })).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.getByRole("button", { name: "Sign in as owner@harbor-hall.example" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Events" })).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.getByRole("link", { name: "Midnight Jazz Session" }).click();
+  await expect(page.getByRole("region", { name: "Bookings" })).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.getByRole("link", { name: "Check-in", exact: true }).click();
+  await page.getByLabel("Booking reference").fill("ABCD-EFGH");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByText("No booking ABCD-EFGH")).toBeVisible();
+  await expectNoViolations(page);
+});

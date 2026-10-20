@@ -1,5 +1,13 @@
 import type { Db } from "@/server/db";
-import { clientAddress, consumeRateLimit, limitCancellation, rateLimits } from "@/server/rate-limit";
+import {
+  clientAddress,
+  consumeRateLimit,
+  limitCancellation,
+  limitLogin,
+  peekRateLimit,
+  rateLimits,
+  recordFailedLogin,
+} from "@/server/rate-limit";
 import { createTestDb, resetDatabase } from "../../test/integration/factories";
 
 let db: Db;
@@ -74,6 +82,37 @@ describe("limitCancellation", () => {
 
     expect(results.slice(0, -1).every((result) => result.allowed)).toBe(true);
     expect(results.at(-1)).toMatchObject({ allowed: false });
+  });
+});
+
+describe("peekRateLimit", () => {
+  it("reads the counter written by consumeRateLimit without counting a hit", async () => {
+    for (const second of [0, 1, 2]) {
+      await consumeRateLimit(db, "k", rule, at(second));
+    }
+
+    expect(await peekRateLimit(db, "k", rule, at(10))).toEqual({ allowed: false, retryAfterSeconds: 50 });
+    expect(await peekRateLimit(db, "k", rule, at(60))).toEqual({ allowed: true });
+    expect(await peekRateLimit(db, "unknown", rule, at(10))).toEqual({ allowed: true });
+    expect((await db.rateLimit.findUniqueOrThrow({ where: { key: "k" } })).count).toBe(3);
+  });
+});
+
+describe("limitLogin", () => {
+  it("blocks an account after repeated failures, but not after successful sign-ins", async () => {
+    const fromSomewhere = (i: number) => new Headers({ "x-forwarded-for": `198.51.100.${i}` });
+
+    // Many people signing in to the same (demo) account successfully.
+    for (let i = 0; i < 10; i++) {
+      expect(await limitLogin(fromSomewhere(i), "owner@example.com", db)).toEqual({ allowed: true });
+    }
+    // Then someone guessing its password from several addresses.
+    for (let i = 0; i < rateLimits.loginPerAccount.limit; i++) {
+      await recordFailedLogin("owner@example.com", db);
+    }
+
+    expect(await limitLogin(fromSomewhere(99), "owner@example.com", db)).toMatchObject({ allowed: false });
+    expect(await limitLogin(fromSomewhere(99), "other@example.com", db)).toEqual({ allowed: true });
   });
 });
 

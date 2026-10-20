@@ -23,3 +23,16 @@ export const API_BOOKING_STATUS = {
   EXPIRED: "expired",
   REFUNDED: "refunded",
 } as const satisfies Record<BookingStatusValue, string>;
+
+/** Short labels for lists (the dashboard). */
+export const BOOKING_STATUS_LABELS = {
+  PENDING: "Awaiting payment",
+  CONFIRMED: "Confirmed",
+  CANCELLED: "Cancelled",
+  EXPIRED: "Expired",
+  REFUNDED: "Refunded",
+} as const satisfies Record<BookingStatusValue, string>;
+
+export function isBookingStatus(value: unknown): value is BookingStatusValue {
+  return typeof value === "string" && value in BOOKING_STATUS_LABELS;
+}
