@@ -154,6 +154,15 @@ rarely change; platforms cache previews for days, so "seats left" would quickly 
 the confirmation page is `noindex` and does not show the email address, and cancelling
 needs the email as well as the reference.
 
+**Security headers without giving up static rendering.** Every response carries a
+Content Security Policy, HSTS, `nosniff` and a strict referrer policy
+([`next.config.ts`](next.config.ts)). The CSP does not use nonces: a nonce must be
+different on every request, so every page would have to be rendered per request, which
+turns off the prerendered shells of Cache Components. Instead it allows only same-origin
+resources, blocks plugins, `<base>` changes, framing and form posts to other sites, and
+keeps `'unsafe-inline'` for scripts because Next.js inlines its payload in the static
+shell. An E2E test walks through the booking flow and fails on any CSP violation.
+
 **Money is stored in minor units** (`priceMinor: Int`) and formatted with
 `Intl.NumberFormat`, so JPY and USD both work without floating-point errors.
 
