@@ -1,5 +1,8 @@
 # Seatline — multi-tenant event booking
 
+[![CI](https://github.com/aliaksandr-yanchuk/event-booking-saas/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaksandr-yanchuk/event-booking-saas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A reserved-seating booking service for live events, built as a portfolio project.
 Each organizer (tenant) gets its own event pages; visitors pick seats on a live seat map
 and the booking is confirmed immediately. **Two people can never book the same seat**,
@@ -140,6 +143,9 @@ also per booking. Over the limit, the API answers `429 RATE_LIMITED` with `Retry
 and the forms show "Try again in N minutes".
 
 ## Design decisions
+
+The full record, including the alternatives that were rejected, is in
+[`docs/decisions.md`](docs/decisions.md).
 
 **Double booking is impossible by construction.** `booking_seats.seat_id` has a UNIQUE
 constraint. The service checks availability first for a friendly error, but correctness
