@@ -41,6 +41,7 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 | メール                   | トランザクショナル・アウトボックス、`after()` による応答後の送信、`SKIP LOCKED` での取得と再送、署名付きのワンクリック管理リンク    |
 | REST API                 | RFC 9457 形式のエラー、適切なステータスコード、入力検証のスキーマから生成する OpenAPI を備えたバージョン付き JSON API               |
 | フロントエンド           | Cache Components を使った Next.js 16 App Router、React 19 Server Actions、JavaScript なしでも動くアクセシブルなフォーム             |
+| 多言語対応               | 英語と日本語: 型付きの辞書、英語の URL はそのままで `/ja` の URL を追加、`hreflang`、お客様の言語でのメール                         |
 | SEO                      | イベントごとのメタデータ、canonical URL、生成した Open Graph 画像、schema.org `Event` の JSON-LD、sitemap と robots                 |
 | テスト                   | Jest の単体テスト、実 DB に対する Jest の結合テスト、PC とスマホでの Playwright E2E、WCAG の自動チェック                            |
 | デリバリー               | マルチステージの Docker イメージ、別ジョブとしてのマイグレーション、GitHub Actions CI                                               |
@@ -82,7 +83,7 @@ Web ページと REST API は、同じサービス層への 2 つの入口です
 Server Actions を使い、ほかのクライアント(モバイルアプリ、提携先のシステム)は JSON API を使います。
 予約のルールはサービスにしかないため、どちらから使っても同じように動きます。
 
-- **ページ**は Server Components です。各ページは静的なシェルを事前レンダリングし、データに依存する部分は
+- **ページ**は `app/[lang]` の下にある Server Components です。各ページは言語ごとに静的なシェルを事前レンダリングし、データに依存する部分は
   `<Suspense>` を通してストリーミングで届きます。ビルドにデータベースは不要です。
 - **リポジトリ**にすべてのクエリがあります。読み取りは必ず `organizationId` を受け取るため、slug だけで
   イベントを取得する方法はなく、あるテナントが別のテナントのデータを見ることはありません。
@@ -212,6 +213,18 @@ Webhook が遅れても、支払ったお客様に「支払い待ち」と表示
 Next.js がそれを暗号化するため、クライアントがリクエストを書き換えて予約を別のテナントのイベントに
 向けることはできません。
 
+**英語と日本語に対応し、英語の URL は 1 つも変えない。** すべてのページは `app/[lang]` の下にあり、
+言語ごとに静的なシェルを持ちます。日本語の URL は `/ja` で始まり、[`proxy.ts`](src/proxy.ts) が
+プレフィックスのない URL を内部で `/en` に書き換えるため、日本語に対応する前に共有されたリンクも
+そのまま動きます。文言は型付きの辞書([`src/i18n`](src/i18n))から取得します。日本語の辞書は英語の辞書と
+同じ型なので、翻訳漏れはコンパイルエラーになります。Server Components は、言語をすべてのコンポーネントに
+渡すのではなく `next/root-params` で読み取ります。クライアントコンポーネントには、辞書全体ではなく
+表示する文言だけを渡します。日付と金額はページのロケールで `Intl` を使って表示します
+(`2026年10月28日(水) · 19:00 JST`、`￥8,000`)。予約は言語を記録するため、席の表示、メール、
+署名付きリンク、Stripe Checkout もその言語になります。各ページには `hreflang` の代替リンクがあり、
+sitemap には両方の言語を載せています。主催者のコンテンツ(イベント名や説明)は主催者が書いたまま表示し、
+Open Graph のカードは英語のままです。日本語を描画するには CJK フォントを同梱する必要があるためです。
+
 **フォームは JavaScript なしでも動く。** 席は座席の見た目にした本物の `<input type="checkbox">` なので、
 キーボード操作、スクリーンリーダー、普通の HTML フォーム送信がそのまま動きます。エラーは
 `aria-describedby` と `aria-invalid` で各フィールドに結び付けています。
@@ -299,7 +312,7 @@ nonce を使いません。nonce はリクエストごとに変える必要が�
 | ---------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | 単体             | `npm test`                          | 料金、入力検証、予約番号、JSON-LD、パスワード、署名付きリンク、CSV、メールテンプレート、リアルタイム座席表付きの予約フォーム、Webhook のルート |
 | 結合             | `npm run test:integration`          | PostgreSQL に対する予約・決済サービス: 競合、確保、期限後の入金、返金、テナント分離、レート制限。stripe-mock に対する Stripe アダプター        |
-| E2E              | `npm run test:e2e`                  | Chromium での予約・決済・解放・返金・メール・ダッシュボードの操作。PC とスマホの画面サイズで、本番ビルドに対して実行                           |
+| E2E              | `npm run test:e2e`                  | 英語と日本語での予約・決済・解放・返金・メール・ダッシュボードの操作。Chromium で PC とスマホの画面サイズ、本番ビルドに対して実行              |
 | API              | `npm run test:e2e -- --project=api` | 実際の HTTP での REST API の契約: ステータスコード、ヘッダー、Problem Details、同時予約、テナント分離                                          |
 | アクセシビリティ | `npx playwright test accessibility` | axe-core による全ページ種別の WCAG 2.2 A/AA チェック。ライト・ダークモードの両方、エラー表示中のフォームも含む                                 |
 
@@ -417,10 +430,11 @@ docker compose --profile app up --build
 
 ```
 prisma/                  スキーマ、マイグレーション、デモ用シード
-src/app/                 ルート(ページ、Server Actions、sitemap、robots、ヘルスチェック)
-src/app/dashboard/       主催者ダッシュボード(イベント、予約、CSV エクスポート、入場確認)
-src/app/checkout/demo/   Stripe のキーがないときに使うデモ決済画面
-src/app/api/v1/          REST API のルートハンドラーと OpenAPI ドキュメント
+src/app/[lang]/          言語ごと(en、ja)のページと Server Actions
+src/app/[lang]/dashboard/ 主催者ダッシュボード(イベント、予約、CSV エクスポート、入場確認)
+src/app/[lang]/checkout/demo/ Stripe のキーがないときに使うデモ決済画面
+src/app/api/v1/          REST API のルートハンドラーと OpenAPI ドキュメント(英語)
+src/i18n/                言語、URL のヘルパー、英語と日本語の辞書
 src/server/api/          Problem Details のレスポンスと API のシリアライザー
 src/components/          予約フォーム、キャンセルフォーム、UI の基本部品
 src/lib/                 純粋関数(金額、日付、入力検証、JSON-LD)と単体テスト
@@ -428,7 +442,7 @@ src/server/              DB クライアント、リポジトリ、予約・決�
 src/server/auth/         パスワード、セッション、データアクセス層
 src/server/payments/     決済プロバイダーのインターフェース、Stripe とデモの実装、Webhook の処理
 src/server/email/        アウトボックス、テンプレート、送信の実装、署名付きの管理リンク
-src/proxy.ts             セッション Cookie のないリクエストをログイン画面へ送る
+src/proxy.ts             言語のルーティング(英語はプレフィックスなし)と、ダッシュボードのログインへのリダイレクト
 test/integration/        DB テストの準備とファクトリー
 e2e/                     Playwright のテスト
 scripts/                 ドキュメント用のスクリーンショット撮影
@@ -448,4 +462,4 @@ scripts/                 ドキュメント用のスクリーンショット撮�
 - どのリクエストにも拾われなかったメールを送る定期ジョブ(現在は後のリクエストが送るため、
   一定のアクセスがあるデモでは十分)
 - シードの代わりに、主催者がイベントと座席表を作る機能
-- 日本語の UI(日付と金額はすでに `Intl` で表示を整えています)
+- イベントのコンテンツの多言語化(現在、主催者は 1 つの言語で入力します)

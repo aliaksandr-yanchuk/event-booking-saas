@@ -1,3 +1,4 @@
+import { ja } from "@/i18n/dictionaries/ja";
 import { parseBookingForm } from "./booking-input";
 
 function formData(fields: { customerName?: string; customerEmail?: string; seatIds?: string[] }) {
@@ -52,5 +53,18 @@ describe("parseBookingForm", () => {
     );
 
     expect(result).toEqual({ success: false, fieldErrors: { customerName: "Use 80 characters or fewer." } });
+  });
+
+  it("returns the messages in the page's language", () => {
+    const result = parseBookingForm(formData({ customerName: "", customerEmail: "x" }), ja.validation);
+
+    expect(result).toEqual({
+      success: false,
+      fieldErrors: {
+        customerName: "お名前を入力してください。",
+        customerEmail: "正しいメールアドレスを入力してください(例: name@example.com)。",
+        seatIds: "席を 1 つ以上選んでください。",
+      },
+    });
   });
 });

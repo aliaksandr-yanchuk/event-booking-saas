@@ -41,6 +41,7 @@ Organizer dashboard: [`/login`](https://event-booking-saas.vercel.app/login), de
 | Email                   | Transactional outbox, delivery after the response with `after()`, `SKIP LOCKED` claims and retries, signed one-click manage links    |
 | REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema  |
 | Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript             |
+| Languages               | English and Japanese: typed dictionaries, `/ja` URLs next to unchanged English ones, `hreflang`, emails in the customer's language   |
 | SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                      |
 | Testing                 | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile, automated WCAG checks         |
 | Delivery                | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI                                                            |
@@ -83,7 +84,7 @@ the pages use Server Components and Server Actions, while other clients (a mobil
 a partner integration) use the JSON API. Booking rules live only in the service, so
 both behave the same.
 
-- **Pages** are Server Components. Each page prerenders a static shell, and the
+- **Pages** live under `app/[lang]` and are Server Components. Each page prerenders a static shell per language, and the
   data-dependent parts stream in through `<Suspense>`. The build needs no database.
 - **Repositories** hold all queries. Every read takes an `organizationId`, so there is
   no way to fetch an event by slug alone, and one tenant can never see another's data.
@@ -222,6 +223,20 @@ the event, and a seat ID from another event or tenant is rejected (`INVALID_SEAT
 passed with `.bind()`, which Next.js encrypts, so a client cannot redirect a booking to
 another tenant's event by editing the request.
 
+**English and Japanese, without changing a single English URL.** Every page lives under
+`app/[lang]` and has one static shell per language. Japanese URLs start with `/ja`;
+[`proxy.ts`](src/proxy.ts) rewrites unprefixed URLs to `/en` internally, so links shared
+before Japanese existed still work. Text comes from typed dictionaries
+([`src/i18n`](src/i18n)): the Japanese one has the type of the English one, so a missing
+translation is a compile error, and Server Components read the language with
+`next/root-params` instead of passing it through every component. Client components get
+only the strings they show, not the whole dictionary. Dates and prices use `Intl` with the
+page's locale (`2026年10月28日(水) · 19:00 JST`, `￥8,000`). A booking remembers its
+language, so its seat labels, emails, signed links and Stripe Checkout use it. Pages carry
+`hreflang` alternates and the sitemap lists both languages. Organizer content (event
+titles and descriptions) is shown as the organizer wrote it, and the Open Graph card stays
+English, because rendering Japanese in it would mean bundling a CJK font.
+
 **Forms work without JavaScript.** Seats are real `<input type="checkbox">` elements styled
 as seat tiles, so keyboard use, screen readers and plain HTML form posts work out of the
 box. Errors are connected to their fields with `aria-describedby` and `aria-invalid`.
@@ -309,13 +324,13 @@ shell. An E2E test walks through the booking flow and fails on any CSP violation
 
 ## Testing
 
-| Suite         | Command                             | What it covers                                                                                                                                      |
-| ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit          | `npm test`                          | Pricing, validation, references, JSON-LD, passwords, signed links, CSV, email templates, the booking form with its live seat map, the webhook route |
-| Integration   | `npm run test:integration`          | Booking and payment services against PostgreSQL: races, holds, late payments, refunds, tenancy, rate limits; the Stripe adapter against stripe-mock |
-| E2E           | `npm run test:e2e`                  | Booking, payment, release, refund, email and dashboard flows in Chromium, on a desktop and a mobile viewport, against the production build          |
-| API           | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation                                     |
-| Accessibility | `npx playwright test accessibility` | axe-core WCAG 2.2 A/AA scan of every page type, in light and dark mode, including the form with errors                                              |
+| Suite         | Command                             | What it covers                                                                                                                                                     |
+| ------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unit          | `npm test`                          | Pricing, validation, references, JSON-LD, passwords, signed links, CSV, email templates, the booking form with its live seat map, the webhook route                |
+| Integration   | `npm run test:integration`          | Booking and payment services against PostgreSQL: races, holds, late payments, refunds, tenancy, rate limits; the Stripe adapter against stripe-mock                |
+| E2E           | `npm run test:e2e`                  | Booking, payment, release, refund, email and dashboard flows in English and Japanese, in Chromium on a desktop and a mobile viewport, against the production build |
+| API           | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation                                                    |
+| Accessibility | `npx playwright test accessibility` | axe-core WCAG 2.2 A/AA scan of every page type, in light and dark mode, including the form with errors                                                             |
 
 CI runs all of them on every pull request, plus lint, formatting, type check and a Docker build.
 In CI, the E2E tests run against the production build (`node .next/standalone/server.js`).
@@ -436,10 +451,11 @@ after UI changes.
 
 ```
 prisma/                  schema, migrations, demo seed
-src/app/                 routes (pages, Server Actions, sitemap, robots, health check)
-src/app/dashboard/       organizer dashboard (events, bookings, CSV export, check-in)
-src/app/checkout/demo/   the demo checkout used without Stripe keys
-src/app/api/v1/          REST API route handlers + OpenAPI document
+src/app/[lang]/          pages and Server Actions, once per language (en, ja)
+src/app/[lang]/dashboard/ organizer dashboard (events, bookings, CSV export, check-in)
+src/app/[lang]/checkout/demo/ the demo checkout used without Stripe keys
+src/app/api/v1/          REST API route handlers + OpenAPI document (English)
+src/i18n/                languages, URL helpers, English and Japanese dictionaries
 src/server/api/          Problem Details responses and API serializers
 src/components/          booking form, cancel form, UI primitives
 src/lib/                 pure functions (money, dates, validation, JSON-LD) + unit tests
@@ -447,7 +463,7 @@ src/server/              database client, repositories, booking and payment serv
 src/server/auth/         passwords, sessions, data access layer
 src/server/payments/     payment provider interface, Stripe and demo providers, webhook handling
 src/server/email/        outbox, templates, senders, signed manage links
-src/proxy.ts             redirects requests without a session cookie to the login page
+src/proxy.ts             language routing (English unprefixed), and the dashboard's login redirect
 test/integration/        database test setup and factories
 e2e/                     Playwright tests
 scripts/                 screenshot capture for the docs
@@ -468,4 +484,4 @@ the test suites, not by assuming the generated code was correct.
 - A scheduled job that delivers emails nobody's request picked up (today a later request
   does it, which is enough for a demo with steady traffic)
 - Organizer tools to create events and seat maps, instead of the seed
-- Japanese UI (dates and currency are already formatted with `Intl`)
+- Event content in several languages (organizers enter one language today)

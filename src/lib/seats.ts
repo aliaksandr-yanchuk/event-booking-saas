@@ -1,12 +1,17 @@
+import { fill } from "@/i18n/config";
+
 export type SeatPosition = {
   sectionName: string;
   row: string;
   number: number;
 };
 
-/** Human-readable label, e.g. "Floor · Row B · Seat 12". */
-export function seatLabel({ sectionName, row, number }: SeatPosition): string {
-  return `${sectionName} · Row ${row} · Seat ${number}`;
+/**
+ * Human-readable label from the dictionary's template: "Floor · Row B · Seat 12", or
+ * "Floor B列 12番" in Japanese. Bookings store their labels in the customer's language.
+ */
+export function seatLabel({ sectionName, row, number }: SeatPosition, template: string): string {
+  return fill(template, { section: sectionName, row, number });
 }
 
 /**

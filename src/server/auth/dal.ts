@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
 import type { MemberRole } from "@/generated/prisma/client";
+import { localizePath, splitLocale } from "@/i18n/config";
 import { db } from "@/server/db";
 import { SESSION_COOKIE, findSessionUserId } from "@/server/auth/session";
 
@@ -47,11 +48,15 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   });
 });
 
-/** The signed-in user; anyone else is sent to the login page, and back here afterwards. */
+/**
+ * The signed-in user; anyone else is sent to the login page (in the language of
+ * `returnTo`, the public path of the current page), and back here afterwards.
+ */
 export async function requireUser(returnTo: string): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) {
-    redirect(`/login?next=${encodeURIComponent(returnTo)}`);
+    const { locale } = splitLocale(returnTo);
+    redirect(`${localizePath(locale, "/login")}?next=${encodeURIComponent(returnTo)}`);
   }
   return user;
 }

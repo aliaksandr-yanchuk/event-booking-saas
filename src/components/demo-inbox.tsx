@@ -1,24 +1,25 @@
 "use client";
 
 import { Fragment, useActionState } from "react";
-import type { DemoInboxState } from "@/app/[org]/bookings/[reference]/actions";
+import type { DemoInboxState } from "@/app/[lang]/[org]/bookings/[reference]/actions";
 import { buttonClasses } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { submitWithoutReset } from "@/lib/submit-without-reset";
 
 type DemoInboxProps = {
   action: (state: DemoInboxState, formData: FormData) => Promise<DemoInboxState>;
+  t: { email: string; open: string; refresh: string; opening: string; empty: string; list: string };
 };
 
 /** Shows the emails of this booking on a demo without an email provider. */
-export function DemoInbox({ action }: DemoInboxProps) {
+export function DemoInbox({ action, t }: DemoInboxProps) {
   const [state, formAction, pending] = useActionState(action, { status: "idle" });
 
   return (
     <div className="flex flex-col gap-4">
       <form action={formAction} onSubmit={submitWithoutReset(formAction)} className="flex flex-col gap-3" noValidate>
         <TextField
-          label="Your email address"
+          label={t.email}
           name="email"
           type="email"
           autoComplete="email"
@@ -27,16 +28,16 @@ export function DemoInbox({ action }: DemoInboxProps) {
         />
         <div>
           <button type="submit" className={buttonClasses("secondary")} disabled={pending}>
-            {pending ? "Opening…" : state.status === "open" ? "Refresh inbox" : "Open inbox"}
+            {pending ? t.opening : state.status === "open" ? t.refresh : t.open}
           </button>
         </div>
       </form>
 
       {state.status === "open" &&
         (state.messages.length === 0 ? (
-          <p className="text-sm text-muted">No emails yet. They are sent a moment after each change.</p>
+          <p className="text-sm text-muted">{t.empty}</p>
         ) : (
-          <ol className="flex flex-col gap-3" aria-label="Emails for this booking">
+          <ol className="flex flex-col gap-3" aria-label={t.list}>
             {state.messages.map((message) => (
               <li key={message.id} className="rounded-xl border border-border bg-surface p-4">
                 <article aria-label={message.subject}>

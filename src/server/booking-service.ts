@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { BookingStatus } from "@/generated/prisma/client";
+import { DEFAULT_LOCALE, type Locale } from "@/i18n/config";
+import { dictionaryFor } from "@/i18n/dictionaries";
 import { generateBookingReference } from "@/lib/booking-reference";
 import type { BookingInput } from "@/lib/booking-input";
 import { sumMinor } from "@/lib/money";
@@ -16,6 +18,8 @@ export type CreateBookingCommand = BookingInput & {
   eventId: string;
   // Client-chosen key that makes retries safe: see IdempotencyKey in schema.prisma.
   idempotencyKey?: string;
+  // The customer's language, for seat labels and emails. The API books in English.
+  locale?: Locale;
 };
 
 export type CreateBookingResult =
@@ -108,6 +112,8 @@ export async function createBooking(
   const totalMinor = sumMinor(seats.map((seat) => seat.section.priceMinor));
   const reference = generateReference();
   const status: BookingStatus = totalMinor > 0 ? "PENDING" : "CONFIRMED";
+  const locale = command.locale ?? DEFAULT_LOCALE;
+  const labelTemplate = dictionaryFor(locale).seats.label;
   const expiresAt = status === "PENDING" ? new Date(now.getTime() + HOLD_TTL_MS) : null;
 
   try {
@@ -124,8 +130,9 @@ export async function createBooking(
           totalMinor,
           status,
           expiresAt,
+          locale,
           seatLabels: seats.map((seat) =>
-            seatLabel({ sectionName: seat.section.name, row: seat.row, number: seat.number }),
+            seatLabel({ sectionName: seat.section.name, row: seat.row, number: seat.number }, labelTemplate),
           ),
           seatIds: seats.map((seat) => seat.id),
         },

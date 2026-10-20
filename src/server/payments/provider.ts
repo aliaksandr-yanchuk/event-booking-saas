@@ -14,6 +14,8 @@ export type CheckoutRequest = {
   customerEmail: string;
   successUrl: string;
   cancelUrl: string;
+  // The language of the checkout page (Stripe shows its own texts in it).
+  locale: "en" | "ja";
   // The checkout stops accepting payment at this moment (before the hold runs out).
   expiresAt: Date;
 };

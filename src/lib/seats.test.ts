@@ -1,8 +1,13 @@
+import { en } from "@/i18n/dictionaries/en";
+import { ja } from "@/i18n/dictionaries/ja";
 import { groupSeatsByRow, seatLabel } from "./seats";
 
 describe("seatLabel", () => {
   it("includes section, row and number", () => {
-    expect(seatLabel({ sectionName: "Balcony", row: "B", number: 12 })).toBe("Balcony · Row B · Seat 12");
+    expect(seatLabel({ sectionName: "Balcony", row: "B", number: 12 }, en.seats.label)).toBe(
+      "Balcony · Row B · Seat 12",
+    );
+    expect(seatLabel({ sectionName: "Balcony", row: "B", number: 12 }, ja.seats.label)).toBe("Balcony B列 12番");
   });
 });
 

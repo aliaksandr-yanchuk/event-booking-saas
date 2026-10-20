@@ -120,3 +120,11 @@ test("login page and the organizer dashboard", async ({ page }) => {
   await expect(page.getByText("No booking ABCD-EFGH")).toBeVisible();
   await expectNoViolations(page);
 });
+
+test("Japanese pages", async ({ page }) => {
+  for (const path of ["/ja", "/ja/harbor-hall/events/midnight-jazz-session", "/ja/login"]) {
+    await page.goto(path);
+    await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+    await expectNoViolations(page);
+  }
+});

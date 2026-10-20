@@ -1,3 +1,5 @@
+import { plural } from "@/i18n/config";
+import { en, type Dictionary } from "@/i18n/dictionaries/en";
 import { db as defaultDb, type Db } from "@/server/db";
 
 /**
@@ -134,8 +136,10 @@ export async function peekRateLimit(
   return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
 }
 
-/** "Try again in 3 minutes." for the forms. */
-export function retryAfterMessage(retryAfterSeconds: number): string {
-  const minutes = Math.ceil(retryAfterSeconds / 60);
-  return `Too many attempts. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+/** "Try again in 3 minutes." for the forms, in the form's language. */
+export function retryAfterMessage(
+  retryAfterSeconds: number,
+  forms: Dictionary["rateLimited"] = en.rateLimited,
+): string {
+  return plural(forms, Math.ceil(retryAfterSeconds / 60));
 }

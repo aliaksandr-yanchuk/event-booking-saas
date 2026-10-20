@@ -1,9 +1,12 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { BookingFormState } from "@/app/[org]/events/[event]/actions";
+import type { BookingFormState } from "@/app/[lang]/[org]/events/[event]/actions";
 import type { SeatMap } from "@/server/repositories/events";
-import { BookingForm } from "./booking-form";
+import { en } from "@/i18n/dictionaries/en";
+import { BookingForm, type BookingFormText } from "./booking-form";
 import { POLL_INTERVAL_MS } from "./use-live-taken-seats";
+
+const text: BookingFormText = { form: en.bookingForm, seats: en.seats, free: en.organizer.free };
 
 const sections: SeatMap = [
   {
@@ -31,6 +34,8 @@ function renderForm(
 ) {
   render(
     <BookingForm
+      locale="en"
+      t={text}
       action={action}
       sections={sections}
       currency="JPY"
@@ -71,6 +76,8 @@ describe("BookingForm", () => {
     ];
     render(
       <BookingForm
+        locale="en"
+        t={text}
         action={jest.fn()}
         sections={free}
         currency="JPY"

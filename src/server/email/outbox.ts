@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { DEFAULT_LOCALE, isLocale, localizePath } from "@/i18n/config";
 import { absoluteUrl } from "@/lib/site";
 import type { Db } from "@/server/db";
 import { signManageToken } from "@/server/email/manage-link";
@@ -66,6 +67,7 @@ export async function deliverPendingEmails(
             seatLabels: true,
             totalMinor: true,
             refundedAt: true,
+            locale: true,
             organization: { select: { slug: true } },
             event: {
               select: { title: true, startsAt: true, currency: true, venue: { select: { name: true, city: true } } },
@@ -76,10 +78,13 @@ export async function deliverPendingEmails(
     });
     try {
       const { booking } = message;
-      const bookingPath = `/${booking.organization.slug}/bookings/${booking.reference}`;
+      // Links open the pages in the language the customer booked in.
+      const locale = isLocale(booking.locale) ? booking.locale : DEFAULT_LOCALE;
+      const bookingPath = localizePath(locale, `/${booking.organization.slug}/bookings/${booking.reference}`);
       // The link works until the event starts; after that there is nothing to manage.
       const token = signManageToken({ bookingId: booking.id, email: booking.customerEmail }, booking.event.startsAt);
       const rendered = renderEmail(message.template as EmailTemplate, {
+        locale,
         customerName: booking.customerName,
         reference: booking.reference,
         eventTitle: booking.event.title,

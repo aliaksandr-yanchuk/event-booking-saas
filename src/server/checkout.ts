@@ -1,3 +1,4 @@
+import { localizePath, type Locale } from "@/i18n/config";
 import { absoluteUrl } from "@/lib/site";
 import { db } from "@/server/db";
 import { startCheckout } from "@/server/payment-service";
@@ -8,11 +9,12 @@ import { getPaymentProvider } from "@/server/payments";
  * the way back: after paying, the customer lands on the return route, which confirms
  * the payment if the webhook has not done so yet; after cancelling, on the booking page.
  */
-export function beginCheckout(organization: { id: string; slug: string }, reference: string) {
-  const bookingPath = `/${organization.slug}/bookings/${reference}`;
+export function beginCheckout(organization: { id: string; slug: string }, reference: string, locale: Locale) {
+  const bookingPath = localizePath(locale, `/${organization.slug}/bookings/${reference}`);
   return startCheckout(db, getPaymentProvider(), {
     organizationId: organization.id,
     reference,
+    locale,
     successUrl: absoluteUrl(`${bookingPath}/return`),
     cancelUrl: absoluteUrl(bookingPath),
   });

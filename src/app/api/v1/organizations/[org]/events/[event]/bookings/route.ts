@@ -102,7 +102,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/organiza
   let expiresAt = result.expiresAt;
   if (status === "PENDING") {
     try {
-      const checkout = await beginCheckout(organization, result.reference);
+      // The API speaks English; its checkout and links are the English ones.
+      const checkout = await beginCheckout(organization, result.reference, "en");
       if (checkout.ok) {
         // Creating the checkout renews the hold.
         checkoutUrl = checkout.url;

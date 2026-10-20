@@ -28,6 +28,7 @@ export function createStripeProvider(stripe: Stripe): PaymentProvider {
             },
           },
         ],
+        locale: request.locale,
         success_url: request.successUrl,
         cancel_url: request.cancelUrl,
         expires_at: Math.floor(request.expiresAt.getTime() / 1000),

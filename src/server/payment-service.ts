@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from "@/i18n/config";
 import type { Db } from "@/server/db";
 import { enqueueEmail } from "@/server/email/outbox";
 import { isUniqueViolation } from "@/server/db-errors";
@@ -26,7 +27,7 @@ export type StartCheckoutResult =
 export async function startCheckout(
   db: Db,
   payments: PaymentProvider,
-  command: { organizationId: string; reference: string; successUrl: string; cancelUrl: string },
+  command: { organizationId: string; reference: string; successUrl: string; cancelUrl: string; locale?: Locale },
   options: { now?: Date } = {},
 ): Promise<StartCheckoutResult> {
   const now = options.now ?? new Date();
@@ -58,6 +59,7 @@ export async function startCheckout(
     customerEmail: booking.customerEmail,
     successUrl: command.successUrl,
     cancelUrl: command.cancelUrl,
+    locale: command.locale ?? DEFAULT_LOCALE,
     expiresAt: new Date(now.getTime() + CHECKOUT_TTL_MS),
   });
 

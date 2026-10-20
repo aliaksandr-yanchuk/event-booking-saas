@@ -1,22 +1,38 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { DEFAULT_LOCALE, localizePath, splitLocale } from "@/i18n/config";
 import { SESSION_COOKIE } from "@/server/auth/session";
 
 /**
- * Optimistic check only: no session cookie, no dashboard page, straight to the login
- * page (with the way back). It reads no database, because the proxy runs before every
- * matching request, including prefetches. Whether the cookie is valid, and what the
- * user may see, is decided by the data access layer (src/server/auth/dal.ts).
+ * Runs before every page request:
+ *
+ * 1. Language: Japanese URLs start with /ja; English URLs have no prefix and are
+ *    rewritten to /en internally, because every page lives under app/[lang]. The browser
+ *    keeps seeing the unprefixed URL.
+ * 2. Dashboard, optimistic check only: no session cookie, straight to the login page
+ *    (with the way back). No database here, because this runs before every request,
+ *    prefetches included; the data access layer (src/server/auth/dal.ts) decides.
  */
 export function proxy(request: NextRequest) {
-  if (request.cookies.has(SESSION_COOKIE.name)) {
-    return NextResponse.next();
+  const { pathname, search } = request.nextUrl;
+  const { locale, path } = splitLocale(pathname);
+
+  // The CSV export answers 401 itself, which suits a download better than a redirect.
+  const isDashboardPage = (path === "/dashboard" || path.startsWith("/dashboard/")) && !path.endsWith(".csv");
+  if (isDashboardPage && !request.cookies.has(SESSION_COOKIE.name)) {
+    const login = new URL(localizePath(locale, "/login"), request.url);
+    login.searchParams.set("next", pathname + search);
+    return NextResponse.redirect(login);
   }
-  const login = new URL("/login", request.url);
-  login.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
-  return NextResponse.redirect(login);
+
+  if (locale === DEFAULT_LOCALE && !pathname.startsWith(`/${DEFAULT_LOCALE}/`) && pathname !== `/${DEFAULT_LOCALE}`) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/${DEFAULT_LOCALE}${pathname === "/" ? "" : pathname}`;
+    return NextResponse.rewrite(url);
+  }
+  return NextResponse.next();
 }
 
 export const config = {
-  // Not the CSV export: it answers 401 itself, which suits a download better than a redirect.
-  matcher: ["/dashboard", "/dashboard/((?!.*\\.csv$).*)"],
+  // Everything but the API, Next.js internals and files served as they are.
+  matcher: ["/((?!api/|_next/|favicon\\.ico$|robots\\.txt$|sitemap\\.xml$|.*\\.(?:png|jpg|svg|ico|webp|txt|xml)$).*)"],
 };

@@ -133,6 +133,8 @@ model Booking {
   customerEmail  String
   status         BookingStatus @default(CONFIRMED)
   totalMinor     Int
+  // The customer's language ("en", "ja"): seat labels, emails and links use it.
+  locale         String        @default("en")
   // Copied at booking time, so a cancelled booking still shows what was bought,
   // and a payment that arrives after the hold expired knows which seats to take back.
   seatLabels     String[]

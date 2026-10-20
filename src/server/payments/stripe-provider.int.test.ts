@@ -30,6 +30,7 @@ describe("Stripe provider (against stripe-mock)", () => {
       successUrl: "https://seatline.example/harbor-hall/bookings/7KQM-4XPA/return",
       cancelUrl: "https://seatline.example/harbor-hall/bookings/7KQM-4XPA",
       expiresAt: new Date(Date.now() + 30 * 60_000),
+      locale: "ja",
     });
 
     expect(session.sessionId).toMatch(/^cs_/);

@@ -1,3 +1,5 @@
+import { fill, type Locale } from "@/i18n/config";
+import { dictionaryFor } from "@/i18n/dictionaries";
 import { formatEventDate, formatEventTime } from "@/lib/dates";
 import { escapeHtml } from "@/lib/html";
 import { formatMoney } from "@/lib/money";
@@ -6,6 +8,8 @@ import { SITE_NAME } from "@/lib/site";
 export type EmailTemplate = "booking-confirmed" | "booking-cancelled" | "payment-refunded";
 
 export type EmailData = {
+  // The customer's language: the email is written in it.
+  locale: Locale;
   customerName: string;
   reference: string;
   eventTitle: string;
@@ -27,43 +31,42 @@ export type RenderedEmail = { subject: string; text: string; html: string };
  * in the HTML: the customer's name is user input.
  */
 export function renderEmail(template: EmailTemplate, data: EmailData): RenderedEmail {
-  const when = `${formatEventDate(data.eventStartsAt)} · ${formatEventTime(data.eventStartsAt)}`;
-  const total = formatMoney(data.totalMinor, data.currency);
+  const t = dictionaryFor(data.locale).email;
+  const when = `${formatEventDate(data.eventStartsAt, data.locale)} · ${formatEventTime(data.eventStartsAt, data.locale)}`;
+  const total = formatMoney(data.totalMinor, data.currency, data.locale);
+  const values = { event: data.eventTitle, reference: data.reference, total };
   const details = [
     `${data.eventTitle}`,
     `${when}, ${data.venue}`,
     ...data.seatLabels,
-    `Total: ${total}`,
-    `Reference: ${data.reference}`,
+    fill(t.total, { total }),
+    fill(t.reference, { reference: data.reference }),
   ];
 
   const content = {
     "booking-confirmed": {
-      subject: `Your booking for ${data.eventTitle} (${data.reference})`,
-      intro: `Your seats are booked. Show the QR code on your booking page at the door.`,
+      subject: fill(t.confirmed.subject, values),
+      intro: t.confirmed.intro,
       links: [
-        ["Your booking and ticket", data.bookingUrl],
-        ["Manage or cancel your booking", data.manageUrl],
+        [t.confirmed.bookingLink, data.bookingUrl],
+        [t.confirmed.manageLink, data.manageUrl],
       ],
     },
     "booking-cancelled": {
-      subject: `Booking ${data.reference} cancelled`,
-      intro: data.refunded
-        ? `Your booking has been cancelled and your payment of ${total} refunded in full.`
-        : `Your booking has been cancelled and the seats released.`,
-      links: [["Your booking", data.bookingUrl]],
+      subject: fill(t.cancelled.subject, values),
+      intro: data.refunded ? fill(t.cancelled.introRefunded, values) : t.cancelled.intro,
+      links: [[t.cancelled.bookingLink, data.bookingUrl]],
     },
     "payment-refunded": {
-      subject: `Your payment for ${data.eventTitle} was refunded`,
-      intro:
-        `Your payment arrived after the hold on your seats had run out, and another customer had ` +
-        `booked some of them by then. The full amount of ${total} has been refunded.`,
-      links: [["Your booking", data.bookingUrl]],
+      subject: fill(t.refunded.subject, values),
+      intro: fill(t.refunded.intro, values),
+      links: [[t.refunded.bookingLink, data.bookingUrl]],
     },
   }[template];
 
+  const greeting = fill(t.greeting, { name: data.customerName });
   const text = [
-    `Hello ${data.customerName},`,
+    greeting,
     "",
     content.intro,
     "",
@@ -75,7 +78,7 @@ export function renderEmail(template: EmailTemplate, data: EmailData): RenderedE
   ].join("\n");
 
   const html = [
-    `<p>Hello ${escapeHtml(data.customerName)},</p>`,
+    `<p>${escapeHtml(greeting)}</p>`,
     `<p>${escapeHtml(content.intro)}</p>`,
     `<p>${details.map(escapeHtml).join("<br>")}</p>`,
     `<p>${content.links.map(([label, url]) => `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`).join("<br>")}</p>`,

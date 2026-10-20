@@ -1,6 +1,7 @@
 import { renderEmail, type EmailData } from "./templates";
 
 const data: EmailData = {
+  locale: "en",
   customerName: 'Aiko <script>alert("x")</script>',
   reference: "7KQM-4XPA",
   eventTitle: "Midnight Jazz Session",
@@ -29,6 +30,15 @@ describe("renderEmail", () => {
 
     expect(html).not.toContain("<script>");
     expect(html).toContain("Aiko &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
+  });
+
+  it("writes the email in the customer's language", () => {
+    const email = renderEmail("booking-confirmed", { ...data, locale: "ja", seatLabels: ["Floor B列 1番"] });
+
+    expect(email.subject).toBe("Midnight Jazz Session のご予約が確定しました(7KQM-4XPA)");
+    expect(email.text).toContain("2026年10月28日(水) · 19:00 JST");
+    expect(email.text).toContain("合計: ￥8,000");
+    expect(email.text).toContain(`予約の管理・キャンセル: ${data.manageUrl}`);
   });
 
   it("mentions the refund when a paid booking is cancelled", () => {

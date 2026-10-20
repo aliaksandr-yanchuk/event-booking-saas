@@ -73,6 +73,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   parses the response with its schema. Breaking changes need a new version prefix.
 - Route handlers cannot call `updateTag`; invalidate with `revalidateTag(tag, { expire: 0 })`.
 
+### Languages
+
+- Every UI string lives in `src/i18n/dictionaries/en.ts` and `ja.ts`; never hard-code text
+  in a component. Internal links go through `localizePath(locale, path)`.
+- Server Components get the language from `getDictionary()`; Server Actions take the
+  locale as a bound argument. Client components receive only the strings they show.
+- E2E tests that need Japanese text go in `e2e/japanese.spec.ts`.
+
 ### Documentation
 
 - `README.md` and `README.ja.md` have the same sections in the same order. A change to one

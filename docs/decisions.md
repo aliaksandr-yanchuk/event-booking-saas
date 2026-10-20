@@ -303,3 +303,25 @@ against a per-booking limit; the customer's own checks do not.
 
 **Rejected.** Putting the email in the link: then the link would reveal it. Making the
 reference alone enough to cancel: a forwarded or leaked booking URL could cancel it.
+
+## 27. English and Japanese, with the language in the URL (2026-10-20)
+
+**Context.** Japanese visitors should get a Japanese site, and links shared before
+Japanese existed must keep working.
+
+**Decision.** Pages live under `app/[lang]`; English stays unprefixed (the proxy rewrites
+it to `/en` internally) and Japanese is under `/ja`. Each language has its own static
+shell, `hreflang` alternates and sitemap entries. Text comes from TypeScript dictionaries,
+the Japanese one typed as the English one. Server Components read the language with
+`next/root-params`; Server Actions and route handlers, which cannot, get it bound as an
+argument. A booking stores its language for its seat labels, emails and checkout. The REST
+API stays English.
+
+**Rejected.** Choosing the language from `Accept-Language` or a cookie on the same URL:
+pages would render per request (no static shells), and search engines would see only one
+language. An i18n library (next-intl and others): for two languages and plain strings,
+typed objects and three helpers (`localizePath`, `fill`, `plural`) are enough.
+
+**Consequences.** The language switcher needs the current path, which the static shell
+does not know; until it streams in, the other language links to its home page (also what
+visitors without JavaScript get). The Open Graph card stays English (no CJK font bundled).

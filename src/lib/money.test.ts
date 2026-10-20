@@ -16,8 +16,13 @@ describe("formatMoney", () => {
 
 describe("formatPrice", () => {
   it("shows free seats as Free and everything else as money", () => {
-    expect(formatPrice(0, "JPY")).toBe("Free");
-    expect(formatPrice(6000, "JPY")).toBe("¥6,000");
+    expect(formatPrice(0, "JPY", { free: "Free" })).toBe("Free");
+    expect(formatPrice(6000, "JPY", { free: "Free" })).toBe("¥6,000");
+  });
+
+  it("formats in Japanese", () => {
+    expect(formatPrice(0, "JPY", { locale: "ja", free: "無料" })).toBe("無料");
+    expect(formatPrice(6000, "JPY", { locale: "ja", free: "無料" })).toBe("￥6,000");
   });
 });
 

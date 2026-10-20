@@ -24,15 +24,8 @@ export const API_BOOKING_STATUS = {
   REFUNDED: "refunded",
 } as const satisfies Record<BookingStatusValue, string>;
 
-/** Short labels for lists (the dashboard). */
-export const BOOKING_STATUS_LABELS = {
-  PENDING: "Awaiting payment",
-  CONFIRMED: "Confirmed",
-  CANCELLED: "Cancelled",
-  EXPIRED: "Expired",
-  REFUNDED: "Refunded",
-} as const satisfies Record<BookingStatusValue, string>;
+const STATUSES: readonly BookingStatusValue[] = ["PENDING", "CONFIRMED", "CANCELLED", "EXPIRED", "REFUNDED"];
 
 export function isBookingStatus(value: unknown): value is BookingStatusValue {
-  return typeof value === "string" && value in BOOKING_STATUS_LABELS;
+  return typeof value === "string" && (STATUSES as readonly string[]).includes(value);
 }

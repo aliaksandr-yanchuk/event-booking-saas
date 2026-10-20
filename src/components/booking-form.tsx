@@ -1,17 +1,23 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { BookingFormState } from "@/app/[org]/events/[event]/actions";
+import type { BookingFormState } from "@/app/[lang]/[org]/events/[event]/actions";
 import { buttonClasses } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { useLiveTakenSeats } from "@/components/use-live-taken-seats";
+import { fill, plural, type Locale } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { formatMoney, formatPrice } from "@/lib/money";
 import { groupSeatsByRow } from "@/lib/seats";
 import { submitWithoutReset } from "@/lib/submit-without-reset";
 import type { SeatMap } from "@/server/repositories/events";
 
+export type BookingFormText = { form: Dictionary["bookingForm"]; seats: Dictionary["seats"]; free: string };
+
 type BookingFormProps = {
   action: (state: BookingFormState, formData: FormData) => Promise<BookingFormState>;
+  locale: Locale;
+  t: BookingFormText;
   sections: SeatMap;
   currency: string;
   maxSeats: number;
@@ -24,6 +30,8 @@ const initialState: BookingFormState = { status: "idle" };
 
 export function BookingForm({
   action,
+  locale,
+  t,
   sections,
   currency,
   maxSeats,
@@ -41,6 +49,10 @@ export function BookingForm({
   const isTaken = (seat: { id: string; taken: boolean }) =>
     (liveTaken ? liveTaken.has(seat.id) : seat.taken) || takenNow.has(seat.id);
 
+  const money = (amountMinor: number) => formatMoney(amountMinor, currency, locale);
+  const label = (seat: { section: { name: string }; row: string; number: number }) =>
+    fill(t.seats.label, { section: seat.section.name, row: seat.row, number: seat.number });
+
   const seatsById = new Map(
     sections.flatMap((section) => section.seats.map((seat) => [seat.id, { ...seat, section }] as const)),
   );
@@ -53,12 +65,12 @@ export function BookingForm({
     setSelected((current) => new Set([...current].filter((id) => !liveTaken!.has(id))));
     const labels = lost.flatMap((id) => {
       const seat = seatsById.get(id);
-      return seat ? [`${seat.section.name} · Row ${seat.row} · Seat ${seat.number}`] : [];
+      return seat ? [label(seat)] : [];
     });
     setLostNotice(
       labels.length === 1
-        ? `${labels[0]} was just booked by someone else and was removed from your selection.`
-        : `These seats were just booked by someone else and were removed from your selection: ${labels.join(", ")}.`,
+        ? fill(t.form.lostOne, { seat: labels[0] })
+        : fill(t.form.lostMany, { seats: labels.join(", ") }),
     );
   }
   const selectedSeats = [...selected].flatMap((id) => {
@@ -85,10 +97,10 @@ export function BookingForm({
 
   // Paid seats are held and the customer goes on to pay; free seats are booked at once.
   function submitLabel() {
-    if (pending) return total > 0 ? "Holding your seats…" : "Booking…";
-    if (selectedSeats.length === 0) return "Book seats";
-    const seatCount = `${selectedSeats.length} ${selectedSeats.length === 1 ? "seat" : "seats"}`;
-    return total > 0 ? `Continue to payment · ${seatCount} · ${formatMoney(total, currency)}` : `Book ${seatCount}`;
+    if (pending) return total > 0 ? t.form.holding : t.form.booking;
+    if (selectedSeats.length === 0) return t.form.bookSeats;
+    const seats = plural(t.seats.count, selectedSeats.length);
+    return total > 0 ? fill(t.form.continueToPayment, { seats, total: money(total) }) : fill(t.form.book, { seats });
   }
 
   return (
@@ -102,15 +114,18 @@ export function BookingForm({
         className="flex min-w-0 flex-col gap-6"
         aria-describedby={seatError ? "seat-error" : "seat-hint"}
       >
-        <legend className="mb-2 text-xl font-semibold">Choose your seats</legend>
+        <legend className="mb-2 text-xl font-semibold">{t.form.chooseSeats}</legend>
         <p id="seat-hint" className="text-sm text-muted">
-          Up to {maxSeats} seats per booking. Grey seats are already taken.
+          {fill(t.form.hint, { max: maxSeats })}
         </p>
 
         {sections.map((section) => (
           <div key={section.id} className="flex flex-col gap-3">
             <h3 className="font-medium">
-              {section.name} <span className="text-muted">· {formatPrice(section.priceMinor, currency)}</span>
+              {section.name}{" "}
+              <span className="text-muted">
+                · {formatPrice(section.priceMinor, currency, { locale, free: t.free })}
+              </span>
             </h3>
             <div className="overflow-x-auto pb-2">
               <div className="flex min-w-max flex-col gap-1.5">
@@ -132,7 +147,10 @@ export function BookingForm({
                             checked={checked}
                             disabled={taken || (limitReached && !checked)}
                             onChange={() => toggle(seat.id)}
-                            aria-label={`${section.name}, row ${row}, seat ${seat.number}${taken ? ", taken" : ""}`}
+                            aria-label={
+                              fill(t.seats.ariaLabel, { section: section.name, row, number: seat.number }) +
+                              (taken ? t.seats.ariaTaken : "")
+                            }
                             className="peer sr-only"
                           />
                           <span
@@ -163,35 +181,33 @@ export function BookingForm({
         className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5"
       >
         <h3 id="summary-heading" className="font-medium">
-          Your selection
+          {t.form.yourSelection}
         </h3>
         {/* Always rendered, so screen readers announce the notice when it appears. */}
         <p role="status" className="text-sm text-danger empty:hidden">
           {lostNotice}
         </p>
         {selectedSeats.length === 0 ? (
-          <p className="text-sm text-muted">No seats selected yet.</p>
+          <p className="text-sm text-muted">{t.form.noSeats}</p>
         ) : (
           <ul className="text-sm" aria-live="polite">
             {selectedSeats.map((seat) => (
               <li key={seat.id} className="flex justify-between gap-4">
-                <span>
-                  {seat.section.name} · Row {seat.row} · Seat {seat.number}
-                </span>
-                <span>{formatMoney(seat.section.priceMinor, currency)}</span>
+                <span>{label(seat)}</span>
+                <span>{money(seat.section.priceMinor)}</span>
               </li>
             ))}
           </ul>
         )}
         <p className="flex justify-between border-t border-border pt-2 font-medium">
-          <span>Total</span>
-          <span data-testid="booking-total">{formatMoney(total, currency)}</span>
+          <span>{t.form.total}</span>
+          <span data-testid="booking-total">{money(total)}</span>
         </p>
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
-          label="Full name"
+          label={t.form.fullName}
           name="customerName"
           autoComplete="name"
           // Only used without JavaScript, when the page re-renders after a submit.
@@ -200,11 +216,11 @@ export function BookingForm({
           required
         />
         <TextField
-          label="Email"
+          label={t.form.email}
           name="customerEmail"
           type="email"
           autoComplete="email"
-          hint="Needed to manage or cancel your booking. This is a demo, so a made-up address is fine."
+          hint={t.form.emailHint}
           defaultValue={state.values?.customerEmail}
           error={state.fieldErrors?.customerEmail}
           required
