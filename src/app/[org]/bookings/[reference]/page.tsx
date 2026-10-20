@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CancelBookingForm } from "@/components/cancel-booking-form";
+import { DemoInbox } from "@/components/demo-inbox";
 import { TicketQr } from "@/components/ticket-qr";
 import { buttonClasses } from "@/components/ui/button";
 import { isBookingReference } from "@/lib/booking-reference";
@@ -11,9 +12,10 @@ import { formatEventDate, formatEventTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { absoluteUrl } from "@/lib/site";
 import { db } from "@/server/db";
+import { getEmailSender } from "@/server/email/sender";
 import { findBookingByReference } from "@/server/repositories/bookings";
 import { getOrganization } from "@/server/queries";
-import { cancelBookingAction, continueToPaymentAction } from "./actions";
+import { cancelBookingAction, continueToPaymentAction, readDemoInboxAction } from "./actions";
 
 // Booking pages are private: keep them out of search results.
 export const metadata: Metadata = {
@@ -151,6 +153,19 @@ async function BookingDetails({ params }: Pick<Props, "params">) {
           Your payment arrived after the hold had run out, and another customer had booked some of the seats by then.
           The full amount has been refunded.
         </p>
+      )}
+
+      {status !== "PENDING" && status !== "EXPIRED" && getEmailSender().name === "demo" && (
+        <section aria-labelledby="inbox-heading" className="flex flex-col gap-3">
+          <h2 id="inbox-heading" className="text-xl font-semibold">
+            Demo inbox
+          </h2>
+          <p className="text-sm text-muted">
+            This demo does not send real email. Enter the address you booked with to read what was sent, including the
+            link to manage your booking.
+          </p>
+          <DemoInbox action={readDemoInboxAction.bind(null, organization.slug, booking.reference)} />
+        </section>
       )}
 
       <Link href={`/${organization.slug}/events/${booking.event.slug}`} className="text-sm text-accent hover:underline">

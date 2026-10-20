@@ -102,7 +102,7 @@ async function main() {
   const db = createDb(url);
 
   await db.$executeRawUnsafe(
-    "TRUNCATE sessions, memberships, users, rate_limits, idempotency_keys, booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
+    "TRUNCATE email_messages, sessions, memberships, users, rate_limits, idempotency_keys, booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
   );
 
   const harbor = await db.organization.create({

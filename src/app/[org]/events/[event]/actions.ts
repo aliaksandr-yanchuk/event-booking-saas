@@ -8,6 +8,7 @@ import { parseIdempotencyKey } from "@/lib/idempotency-key";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { beginCheckout } from "@/server/checkout";
+import { scheduleEmailDelivery } from "@/server/email";
 import { db } from "@/server/db";
 import { getOrganization, getPublicEvent } from "@/server/queries";
 import { limitBooking, retryAfterMessage } from "@/server/rate-limit";
@@ -105,6 +106,8 @@ export async function bookSeatsAction(
   }
 
   updateTag(cacheTags.eventAvailability(event.id));
+  // A free booking has queued its confirmation email.
+  scheduleEmailDelivery();
 
   // Paid seats are held now; send the customer to pay. A free booking is already confirmed.
   const bookingPage = `/${orgSlug}/bookings/${result.reference}`;

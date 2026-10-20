@@ -80,6 +80,19 @@ test("booking page awaiting payment, and the demo checkout", async ({ page, requ
   await page.getByRole("button", { name: /^Pay / }).click();
   await expect(page.getByText("Booking confirmed")).toBeVisible();
   await expectNoViolations(page);
+
+  // The demo inbox with the confirmation email, and the page its link opens.
+  await page.getByRole("region", { name: "Demo inbox" }).getByLabel("Your email address").fill("mio@example.com");
+  const confirmation = page.getByRole("article", { name: /^Your booking for Midnight Jazz Session/ });
+  await expect(async () => {
+    await page.getByRole("button", { name: /Open inbox|Refresh inbox/ }).click();
+    await expect(confirmation).toBeVisible({ timeout: 1_000 });
+  }).toPass();
+  await expectNoViolations(page);
+
+  await page.goto((await confirmation.getByRole("link", { name: /\/manage\?t=/ }).getAttribute("href"))!);
+  await expect(page.getByRole("button", { name: "Cancel booking" })).toBeVisible();
+  await expectNoViolations(page);
 });
 
 test("not found page", async ({ page }) => {

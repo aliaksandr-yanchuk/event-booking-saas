@@ -6,6 +6,7 @@ import { sumMinor } from "@/lib/money";
 import { seatLabel } from "@/lib/seats";
 import type { Db } from "@/server/db";
 import { isUniqueViolation } from "@/server/db-errors";
+import { enqueueEmail } from "@/server/email/outbox";
 import { activeSeatWhere, releaseStaleHolds } from "@/server/holds";
 import { confirmPayment } from "@/server/payment-service";
 import { HOLD_TTL_MS, type PaymentProvider } from "@/server/payments/provider";
@@ -128,13 +129,17 @@ export async function createBooking(
           ),
           seatIds: seats.map((seat) => seat.id),
         },
-        select: { id: true },
+        select: { id: true, customerEmail: true },
       });
       await tx.bookingSeat.createMany({
         data: seats.map((seat) => ({ bookingId: booking.id, seatId: seat.id })),
       });
       if (idempotency) {
         await tx.idempotencyKey.create({ data: { ...idempotency, bookingId: booking.id } });
+      }
+      // A free booking is confirmed now; a paid one gets its email when the payment confirms it.
+      if (status === "CONFIRMED") {
+        await enqueueEmail(tx, booking, "booking-confirmed");
       }
     });
   } catch (error) {
@@ -218,6 +223,7 @@ export async function cancelBooking(
       id: true,
       eventId: true,
       status: true,
+      customerEmail: true,
       checkoutSessionId: true,
       paymentId: true,
       event: { select: { startsAt: true } },
@@ -251,6 +257,8 @@ export async function cancelBooking(
     });
     if (count === 1) {
       await tx.bookingSeat.deleteMany({ where: { bookingId: booking.id } });
+      // Only for a booking the customer had: releasing an unpaid hold needs no email.
+      if (booking.status === "CONFIRMED") await enqueueEmail(tx, booking, "booking-cancelled");
     }
     return count === 1;
   });

@@ -27,7 +27,8 @@ export default defineConfig({
   webServer: {
     // CI tests the production build; locally the dev server is faster to start.
     command: isCI ? "npm run start" : `npm run dev -- --port ${PORT}`,
-    env: { PORT: String(PORT) },
+    // The production build refuses to sign links without a secret; this one is for tests only.
+    env: { PORT: String(PORT), BOOKING_LINK_SECRET: "e2e-only-booking-link-secret" },
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !isCI,
     timeout: 120_000,

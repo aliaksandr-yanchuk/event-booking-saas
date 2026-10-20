@@ -29,6 +29,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   idempotency key.
 - Tests use `createFakePayments()`; E2E runs against the demo checkout, never Stripe.
 
+### Email
+
+- Queue customer emails with `enqueueEmail(tx, …)` inside the transaction that changes the
+  booking, never by sending directly. Call `scheduleEmailDelivery()` from the Server Action
+  or route handler afterwards.
+- Escape every booking value in email HTML (`escapeHtml`); customer names are user input.
+
 ### Dashboard and auth
 
 - Every dashboard page, Server Action and route handler calls `requireMembership()` (or

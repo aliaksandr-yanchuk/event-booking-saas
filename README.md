@@ -30,6 +30,7 @@ Organizer dashboard: [`/login`](https://event-booking-saas.vercel.app/login), de
 | Concurrency             | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests                              |
 | Auth & roles            | Organizer dashboard with database sessions, scrypt passwords, owner and door-staff roles checked in a data access layer, QR check-in |
 | Payments                | Seat holds that expire, a checkout behind a provider interface, idempotent payment confirmation, late payments and refunds           |
+| Email                   | Transactional outbox, delivery after the response with `after()`, `SKIP LOCKED` claims and retries, signed one-click manage links    |
 | REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema  |
 | Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript             |
 | SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                      |
@@ -250,6 +251,22 @@ logins are rate-limited per account and every attempt per address; successful on
 count per account, because everyone shares the demo accounts. The `next` parameter only
 accepts dashboard paths, so the login page cannot be used as an open redirect.
 
+**Emails go through a transactional outbox.** A booking change and its email are written
+in one transaction ([`outbox.ts`](src/server/email/outbox.ts)): a confirmed booking always
+gets its confirmation, and a booking that lost a race never sends one. Delivery runs after
+the response is sent (Next.js `after()`), so customers never wait for the email provider.
+Each run claims messages with `FOR UPDATE SKIP LOCKED`, so overlapping runs never send the
+same one, and a failed send is retried by later runs, with the message ID as the
+provider's idempotency key. The content is rendered at delivery, so a configuration
+problem only delays an email. With Resend keys, emails are sent; without them, the booking
+page has a demo inbox that shows what was sent, behind the same email check as cancelling.
+
+**The email's link cancels without typing the email.** Cancelling needs the booking email
+as a second factor. A link that was delivered to that address proves the same, so the
+confirmation contains a signed link (HMAC of booking ID, email and expiry, valid until the
+event starts) to a one-click cancel page. The token is checked again in the Server Action,
+and a changed token is refused (unit tests and an E2E test).
+
 **Booking pages are private.** Booking references come from a CSPRNG (31⁸ combinations),
 the confirmation page is `noindex` and does not show the email address, and cancelling
 needs the email as well as the reference.
@@ -315,6 +332,14 @@ code also runs as the Docker image on any container platform.
 - Canonical URLs and preview images use `SITE_URL`, or Vercel's production domain if unset.
 - A scheduled workflow ([`reset-demo.yml`](.github/workflows/reset-demo.yml)) re-seeds the
   demo database every Monday, so the events stay upcoming and visitor bookings are cleared.
+
+### Secrets and optional services
+
+- `BOOKING_LINK_SECRET` (**required in production**): signs the links in emails. Generate
+  one with `openssl rand -base64 32`. Without it, emails cannot be delivered (bookings
+  still work, and queued emails go out once it is set).
+- `RESEND_API_KEY` and `EMAIL_FROM` (optional): send emails with Resend instead of the
+  demo inbox. Resend needs a verified sending domain.
 
 ### Stripe (optional)
 
@@ -388,4 +413,9 @@ the test suites, not by assuming the generated code was correct.
 
 ## Possible next steps
 
-- Email confirmation with a signed management link
+- Sign-up, invitations and password reset for organizer accounts (with a library such as
+  Better Auth once accounts are no longer seeded)
+- A scheduled job that delivers emails nobody's request picked up (today a later request
+  does it, which is enough for a demo with steady traffic)
+- Organizer tools to create events and seat maps, instead of the seed
+- Japanese UI (dates and currency are already formatted with `Intl`)

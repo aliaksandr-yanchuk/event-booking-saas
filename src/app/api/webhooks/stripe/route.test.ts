@@ -7,6 +7,7 @@ import { POST } from "./route";
 
 jest.mock("next/cache", () => ({ revalidateTag: jest.fn() }));
 jest.mock("@/server/db", () => ({ db: {} }));
+jest.mock("@/server/email", () => ({ scheduleEmailDelivery: jest.fn() }));
 jest.mock("@/server/payments/stripe-webhook", () => ({ handleStripeEvent: jest.fn(async () => null) }));
 
 const SECRET = "whsec_test_secret";

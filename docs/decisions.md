@@ -272,3 +272,34 @@ refuses the current time in a prerender.
 **Decision.** `OWNER` sees revenue, customer emails and the CSV export; `STAFF` sees the
 guest list without emails and checks guests in. The CSV route returns 403 for staff, not
 just a hidden button. The CSV defuses spreadsheet formulas in customer-supplied text.
+
+## 25. Customer emails through a transactional outbox (2026-10-20)
+
+**Context.** Sending an email inside the request that confirms a booking couples the two:
+if the provider is slow, the customer waits; if the transaction later rolls back, an email
+about a booking that does not exist has gone out; if the send fails, nothing retries it.
+
+**Decision.** An `email_messages` row is inserted in the transaction that changes the
+booking. After the response, `after()` delivers pending rows: a run claims up to 20 with
+`UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)` and a short claim, sends them
+with the message ID as Resend's idempotency key, and records what was sent. Failures are
+retried by later runs, up to five attempts. Without Resend keys, the sender does nothing
+and the booking page shows a demo inbox.
+
+**Rejected.** A job queue service: another dependency for a handful of emails per day.
+Rendering when queuing: a missing secret or template bug would fail the booking itself.
+
+**Consequences.** An email whose delivery run did not happen (the process stopped right
+after the response) waits for the next request that schedules a run. A cron job would
+close that gap; on Vercel's free plan, cron runs once a day.
+
+## 26. Signed links replace the second factor, not the reference (2026-10-20)
+
+**Decision.** The confirmation email links to `/…/manage?t=<token>`, where the token is an
+HMAC of booking ID, email and expiry (the event's start), with `BOOKING_LINK_SECRET`. The
+page and its Server Action both verify it with a constant-time comparison. The demo inbox
+asks for the booking email, because its messages contain the link. Wrong emails count
+against a per-booking limit; the customer's own checks do not.
+
+**Rejected.** Putting the email in the link: then the link would reveal it. Making the
+reference alone enough to cancel: a forwarded or leaked booking URL could cancel it.

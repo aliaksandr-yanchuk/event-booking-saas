@@ -2,10 +2,11 @@ import type { Db } from "@/server/db";
 import {
   clientAddress,
   consumeRateLimit,
-  limitCancellation,
+  limitEmailCheck,
   limitLogin,
   peekRateLimit,
   rateLimits,
+  recordFailedEmailCheck,
   recordFailedLogin,
 } from "@/server/rate-limit";
 import { createTestDb, resetDatabase } from "../../test/integration/factories";
@@ -72,16 +73,22 @@ describe("consumeRateLimit", () => {
   });
 });
 
-describe("limitCancellation", () => {
-  it("limits attempts per booking, whatever address they come from", async () => {
+describe("limitEmailCheck", () => {
+  it("stops guessing a booking's email from many addresses, but not the customer's own checks", async () => {
     const booking = { organizationId: "org_1", reference: "ABCD-EFGH" };
-    const results = [];
-    for (let i = 0; i <= rateLimits.cancelPerBooking.limit; i++) {
-      results.push(await limitCancellation(new Headers({ "x-forwarded-for": `198.51.100.${i}` }), booking, db));
+    const from = (i: number) => new Headers({ "x-forwarded-for": `198.51.100.${i}` });
+
+    // The customer reads their emails several times: allowed, nothing counted per booking.
+    for (let i = 0; i < 8; i++) {
+      expect(await limitEmailCheck(from(i), booking, db)).toEqual({ allowed: true });
+    }
+    // Someone tries wrong emails, each time from another address.
+    for (let i = 0; i < rateLimits.emailCheckPerBooking.limit; i++) {
+      await recordFailedEmailCheck(booking, db);
     }
 
-    expect(results.slice(0, -1).every((result) => result.allowed)).toBe(true);
-    expect(results.at(-1)).toMatchObject({ allowed: false });
+    expect(await limitEmailCheck(from(50), booking, db)).toMatchObject({ allowed: false });
+    expect(await limitEmailCheck(from(50), { ...booking, reference: "OTHR-REFS" }, db)).toEqual({ allowed: true });
   });
 });
 

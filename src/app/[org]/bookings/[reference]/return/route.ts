@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { isBookingReference } from "@/lib/booking-reference";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { scheduleEmailDelivery } from "@/server/email";
 import { syncCheckout } from "@/server/payment-service";
 import { getPaymentProvider } from "@/server/payments";
 import { getOrganization } from "@/server/queries";
@@ -21,6 +22,7 @@ export async function GET(request: Request, ctx: RouteContext<"/[org]/bookings/[
     if (result?.ok) {
       // A late payment can take seats back (or refund), which changes availability.
       revalidateTag(cacheTags.eventAvailability(result.eventId), { expire: 0 });
+      scheduleEmailDelivery();
     }
   }
   return Response.redirect(new URL(`/${org}/bookings/${reference}`, request.url), 303);

@@ -4,9 +4,10 @@ import { BookingCancelledResponse, CancelBookingRequest, jsonResponse } from "@/
 import { cancelBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { scheduleEmailDelivery } from "@/server/email";
 import { getPaymentProvider } from "@/server/payments";
 import { getOrganization } from "@/server/queries";
-import { limitCancellation } from "@/server/rate-limit";
+import { limitEmailCheck, recordFailedEmailCheck } from "@/server/rate-limit";
 
 /**
  * POST /api/v1/organizations/{org}/bookings/{reference}/cancel
@@ -40,7 +41,7 @@ export async function POST(
   }
 
   // Limited per client and per booking: the email is the secret here, so guessing it is throttled.
-  const limit = await limitCancellation(request.headers, { organizationId: organization.id, reference });
+  const limit = await limitEmailCheck(request.headers, { organizationId: organization.id, reference });
   if (!limit.allowed) {
     return rateLimited(limit.retryAfterSeconds);
   }
@@ -54,6 +55,7 @@ export async function POST(
   if (!result.ok) {
     switch (result.code) {
       case "NOT_FOUND":
+        await recordFailedEmailCheck({ organizationId: organization.id, reference });
         // Same response for an unknown reference and a wrong email: don't reveal which.
         return problem(404, "NOT_FOUND", "No booking with this reference and email.");
       case "ALREADY_CANCELLED":
@@ -64,5 +66,6 @@ export async function POST(
   }
 
   revalidateTag(cacheTags.eventAvailability(result.eventId), { expire: 0 });
+  scheduleEmailDelivery();
   return jsonResponse(BookingCancelledResponse, { data: { reference, status: "cancelled" } });
 }

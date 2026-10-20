@@ -88,7 +88,7 @@ test("a customer cancels a paid booking with their email, which releases the sea
   await expect(page.getByText("Booking confirmed")).toBeVisible();
   await expect(page.getByText("Cancel before the event starts for a full refund.")).toBeVisible();
 
-  const emailField = page.getByLabel("Email used for the booking");
+  const emailField = page.getByRole("region", { name: "Can't make it?" }).getByLabel("Email used for the booking");
   await emailField.fill("wrong@example.com");
   await page.getByRole("button", { name: "Cancel booking" }).click();
   await expect(page.getByText("That email does not match this booking.")).toBeVisible();
@@ -183,4 +183,50 @@ test("the seat map updates live when someone else books a selected seat", async 
     `Balcony · Row B · Seat ${number} was just booked by someone else and was removed from your selection.`,
   );
   await expect(page.getByTestId("booking-total")).toHaveText("¥0");
+});
+
+test("the confirmation email's signed link cancels the booking without typing the email", async ({
+  page,
+}, testInfo) => {
+  const number = testInfo.project.name === "mobile" ? 4 : 3;
+  await page.goto("/kyoto-chamber/events/open-rehearsal");
+  await seat(page, "Hall", "B", number).check({ force: true });
+  await page.getByLabel("Full name").fill("Nao Ueda");
+  await page.getByLabel("Email").fill("nao@example.com");
+  await page.getByRole("button", { name: "Book 1 seat" }).click();
+  await expect(page.getByText("Booking confirmed")).toBeVisible();
+  const reference = await page.getByTestId("booking-reference").textContent();
+
+  // The demo inbox asks for the booking email, like cancelling does.
+  const inboxEmail = page.getByRole("region", { name: "Demo inbox" }).getByLabel("Your email address");
+  await inboxEmail.fill("someone@example.com");
+  await page.getByRole("button", { name: "Open inbox" }).click();
+  await expect(page.getByText("That email does not match this booking.")).toBeVisible();
+
+  // The email is sent just after the response, so it may take a moment to show up.
+  await inboxEmail.fill("nao@example.com");
+  const confirmation = page.getByRole("article", { name: `Your booking for Open Rehearsal (${reference})` });
+  await expect(async () => {
+    await page.getByRole("button", { name: /Open inbox|Refresh inbox/ }).click();
+    await expect(confirmation).toBeVisible({ timeout: 1_000 });
+  }).toPass();
+
+  const manageLink = confirmation.getByRole("link", { name: /\/manage\?t=/ });
+  const manageUrl = new URL((await manageLink.getAttribute("href"))!);
+
+  // A changed token is refused.
+  await page.goto(`${manageUrl.pathname}?t=${manageUrl.searchParams.get("t")}x`);
+  await expect(page.getByText("This link is no longer valid.").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel booking" })).toHaveCount(0);
+
+  await page.goto(manageUrl.pathname + manageUrl.search);
+  await expect(page.getByRole("heading", { name: "Cancel Nao Ueda's booking?" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel booking" }).click();
+  await expect(page.getByText("Booking cancelled")).toBeVisible();
+
+  await inboxEmail.fill("nao@example.com");
+  await expect(async () => {
+    await page.getByRole("button", { name: /Open inbox|Refresh inbox/ }).click();
+    await expect(page.getByRole("article", { name: `Booking ${reference} cancelled` })).toBeVisible({ timeout: 1_000 });
+  }).toPass();
 });

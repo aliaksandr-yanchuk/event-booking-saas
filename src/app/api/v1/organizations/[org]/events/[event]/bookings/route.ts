@@ -8,6 +8,7 @@ import { BookingCreatedResponse, jsonResponse } from "@/server/api/schemas";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { beginCheckout } from "@/server/checkout";
+import { scheduleEmailDelivery } from "@/server/email";
 import { db } from "@/server/db";
 import { limitBooking } from "@/server/rate-limit";
 
@@ -94,6 +95,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/organiza
 
   // expire: 0 drops the cached seat count now, so the next page view is up to date.
   revalidateTag(cacheTags.eventAvailability(event.id), { expire: 0 });
+  scheduleEmailDelivery();
 
   const status = effectiveStatus(result);
   let checkoutUrl: string | null = null;

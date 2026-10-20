@@ -16,10 +16,9 @@ export type RateLimitRule = { limit: number; windowMs: number };
 export const rateLimits = {
   // Generous for a person picking seats, low for a script.
   bookingPerClient: { limit: 20, windowMs: 10 * MINUTE },
-  cancelPerClient: { limit: 10, windowMs: 10 * MINUTE },
-  // Cancelling needs the booking's email. This stops guessing it for a known
-  // reference, even from many addresses.
-  cancelPerBooking: { limit: 5, windowMs: 60 * MINUTE },
+  // Cancelling and the demo inbox need the booking's email: see limitEmailCheck.
+  emailCheckPerClient: { limit: 10, windowMs: 10 * MINUTE },
+  emailCheckPerBooking: { limit: 5, windowMs: 60 * MINUTE },
   // Password guessing: per address, and per account from any number of addresses.
   loginPerClient: { limit: 10, windowMs: 10 * MINUTE },
   loginPerAccount: { limit: 5, windowMs: 15 * MINUTE },
@@ -70,20 +69,37 @@ export function limitBooking(headers: Headers, db: Db = defaultDb) {
   return consumeRateLimit(db, `booking:client:${clientAddress(headers)}`, rateLimits.bookingPerClient);
 }
 
-export async function limitCancellation(
+/**
+ * Before checking a booking's email (cancelling, or the demo inbox): the email is the
+ * secret there. Every attempt counts per address; per booking only wrong emails count,
+ * so a customer reading their own emails does not use up their budget, while guessing
+ * the email for a known reference is stopped even from many addresses.
+ */
+export async function limitEmailCheck(
   headers: Headers,
   booking: { organizationId: string; reference: string },
   db: Db = defaultDb,
 ): Promise<RateLimitResult> {
-  const perClient = await consumeRateLimit(db, `cancel:client:${clientAddress(headers)}`, rateLimits.cancelPerClient);
+  const perClient = await consumeRateLimit(
+    db,
+    `email-check:client:${clientAddress(headers)}`,
+    rateLimits.emailCheckPerClient,
+  );
   if (!perClient.allowed) {
     return perClient;
   }
-  return consumeRateLimit(
-    db,
-    `cancel:booking:${booking.organizationId}:${booking.reference}`,
-    rateLimits.cancelPerBooking,
-  );
+  return peekRateLimit(db, emailCheckBookingKey(booking), rateLimits.emailCheckPerBooking);
+}
+
+export async function recordFailedEmailCheck(
+  booking: { organizationId: string; reference: string },
+  db: Db = defaultDb,
+) {
+  await consumeRateLimit(db, emailCheckBookingKey(booking), rateLimits.emailCheckPerBooking);
+}
+
+function emailCheckBookingKey(booking: { organizationId: string; reference: string }) {
+  return `email-check:booking:${booking.organizationId}:${booking.reference}`;
 }
 
 /**

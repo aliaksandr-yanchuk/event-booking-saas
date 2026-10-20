@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { scheduleEmailDelivery } from "@/server/email";
 import { getPaymentProvider, getStripe } from "@/server/payments";
 import { handleStripeEvent } from "@/server/payments/stripe-webhook";
 
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
   }
 
   const changed = await handleStripeEvent(db, getPaymentProvider(), event);
+  scheduleEmailDelivery();
   if (changed) {
     revalidateTag(cacheTags.eventAvailability(changed.eventId), { expire: 0 });
   }

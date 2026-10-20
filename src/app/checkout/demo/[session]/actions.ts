@@ -5,6 +5,7 @@ import { updateTag } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { scheduleEmailDelivery } from "@/server/email";
 import { confirmPayment } from "@/server/payment-service";
 import { getPaymentProvider } from "@/server/payments";
 
@@ -22,6 +23,7 @@ export async function payDemoCheckoutAction(sessionId: string) {
     notFound();
   }
   updateTag(cacheTags.eventAvailability(result.eventId));
+  scheduleEmailDelivery();
   const booking = await db.booking.findUniqueOrThrow({
     where: { checkoutSessionId: sessionId },
     select: { organization: { select: { slug: true } } },

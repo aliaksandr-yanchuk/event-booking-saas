@@ -11,7 +11,7 @@ export function createTestDb(): Db {
 
 export async function resetDatabase(db: Db) {
   await db.$executeRawUnsafe(
-    "TRUNCATE sessions, memberships, users, rate_limits, idempotency_keys, booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
+    "TRUNCATE email_messages, sessions, memberships, users, rate_limits, idempotency_keys, booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
   );
 }
 

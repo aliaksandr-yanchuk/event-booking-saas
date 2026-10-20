@@ -1,4 +1,5 @@
 import type { Db } from "@/server/db";
+import { enqueueEmail } from "@/server/email/outbox";
 import { isUniqueViolation } from "@/server/db-errors";
 import { CHECKOUT_TTL_MS, HOLD_TTL_MS, type PaymentProvider } from "@/server/payments/provider";
 
@@ -95,7 +96,7 @@ export async function confirmPayment(
   const now = options.now ?? new Date();
   const booking = await db.booking.findUnique({
     where: { checkoutSessionId: command.sessionId },
-    select: { id: true, reference: true, eventId: true, status: true, seatIds: true },
+    select: { id: true, reference: true, eventId: true, status: true, seatIds: true, customerEmail: true },
   });
   if (!booking) return { ok: false, code: "NOT_FOUND" };
   const result = { reference: booking.reference, eventId: booking.eventId };
@@ -109,14 +110,17 @@ export async function confirmPayment(
     case "PENDING": {
       // Still holding its seats (even if expiresAt has just passed, nobody has taken
       // them yet: they are only released by the UPDATE in releaseStaleHolds).
-      const { count } = await db.booking.updateMany({
-        where: { id: booking.id, status: "PENDING" },
-        data: { status: "CONFIRMED", paidAt: now, paymentId: command.paymentId, expiresAt: null },
+      const confirmed = await db.$transaction(async (tx) => {
+        const { count } = await tx.booking.updateMany({
+          where: { id: booking.id, status: "PENDING" },
+          data: { status: "CONFIRMED", paidAt: now, paymentId: command.paymentId, expiresAt: null },
+        });
+        // Queued with the confirmation: exactly one email per confirmed booking.
+        if (count === 1) await enqueueEmail(tx, booking, "booking-confirmed");
+        return count === 1;
       });
       // Lost a race against the release of the stale hold: handle it as expired.
-      return count === 1
-        ? { ok: true, outcome: "CONFIRMED", ...result }
-        : confirmPayment(db, payments, command, options);
+      return confirmed ? { ok: true, outcome: "CONFIRMED", ...result } : confirmPayment(db, payments, command, options);
     }
 
     case "EXPIRED": {
@@ -132,34 +136,38 @@ export async function confirmPayment(
             data: { status: "CONFIRMED", paidAt: now, paymentId: command.paymentId },
           });
           if (count === 0) throw new StateChanged();
+          await enqueueEmail(tx, booking, "booking-confirmed");
         });
         return { ok: true, outcome: "CONFIRMED", ...result };
       } catch (error) {
         if (error instanceof StateChanged) return confirmPayment(db, payments, command, options);
         if (!isUniqueViolation(error)) throw error;
       }
-      return refundLatePayment(db, payments, booking.id, command.paymentId, now, result);
+      return refundLatePayment(db, payments, booking, command.paymentId, now, result);
     }
 
     case "CANCELLED":
       // The customer released the seats, and a payment still came through (it was in
       // progress when the checkout was expired). They did not want the seats: refund.
-      return refundLatePayment(db, payments, booking.id, command.paymentId, now, result);
+      return refundLatePayment(db, payments, booking, command.paymentId, now, result);
   }
 }
 
 async function refundLatePayment(
   db: Db,
   payments: PaymentProvider,
-  bookingId: string,
+  booking: { id: string; customerEmail: string },
   paymentId: string,
   now: Date,
   result: { reference: string; eventId: string },
 ): Promise<ConfirmPaymentResult> {
-  await payments.refund(paymentId, { idempotencyKey: `refund-${bookingId}` });
-  await db.booking.updateMany({
-    where: { id: bookingId, status: { in: ["EXPIRED", "CANCELLED"] } },
-    data: { status: "REFUNDED", paidAt: now, paymentId, refundedAt: now },
+  await payments.refund(paymentId, { idempotencyKey: `refund-${booking.id}` });
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.booking.updateMany({
+      where: { id: booking.id, status: { in: ["EXPIRED", "CANCELLED"] } },
+      data: { status: "REFUNDED", paidAt: now, paymentId, refundedAt: now },
+    });
+    if (count === 1) await enqueueEmail(tx, booking, "payment-refunded");
   });
   return { ok: true, outcome: "REFUNDED", ...result };
 }

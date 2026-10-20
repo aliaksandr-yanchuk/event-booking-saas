@@ -154,6 +154,8 @@ model Booking {
   checkedInById String?
   checkedInBy   User?     @relation(fields: [checkedInById], references: [id], onDelete: SetNull)
 
+  emails EmailMessage[]
+
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   seats          BookingSeat[]
@@ -263,4 +265,42 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+// ---- Email (transactional outbox) ----
+
+enum EmailStatus {
+  PENDING
+  SENT
+  // Gave up after the maximum number of attempts.
+  FAILED
+}
+
+// Emails to customers. A row is inserted in the same transaction as the booking change
+// it reports, so a confirmed booking always gets its email and a rolled-back change
+// never sends one. Delivery happens after the response (src/server/email/outbox.ts);
+// the content is rendered then, so a configuration problem only delays the email.
+model EmailMessage {
+  id          String      @id @default(cuid())
+  bookingId   String
+  // booking-confirmed | booking-cancelled | payment-refunded
+  template    String
+  to          String
+  status      EmailStatus @default(PENDING)
+  attempts    Int         @default(0)
+  // A delivery run claims a message until then, so two runs never send it twice.
+  lockedUntil DateTime?
+  lastError   String?
+  // Filled when the message is sent, as a record of what the customer received.
+  subject     String?
+  text        String?
+  html        String?
+  createdAt   DateTime    @default(now())
+  sentAt      DateTime?
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([bookingId])
+  @@map("email_messages")
 }
