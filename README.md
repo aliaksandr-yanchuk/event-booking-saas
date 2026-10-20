@@ -27,7 +27,7 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 | REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
 | Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript            |
 | SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                     |
-| Testing                 | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile                               |
+| Testing                 | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile, automated WCAG checks        |
 | Delivery                | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI                                                           |
 
 ## Tech stack
@@ -168,12 +168,13 @@ shell. An E2E test walks through the booking flow and fails on any CSP violation
 
 ## Testing
 
-| Suite       | Command                             | What it covers                                                                                                  |
-| ----------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Unit        | `npm test`                          | Pricing, validation, booking references, JSON-LD, the booking form component                                    |
-| Integration | `npm run test:integration`          | Booking service against PostgreSQL: race condition, tenant isolation, cancellation, booking rules               |
-| E2E         | `npm run test:e2e`                  | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport                             |
-| API         | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation |
+| Suite         | Command                             | What it covers                                                                                                  |
+| ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Unit          | `npm test`                          | Pricing, validation, booking references, JSON-LD, the booking form component                                    |
+| Integration   | `npm run test:integration`          | Booking service against PostgreSQL: race condition, tenant isolation, cancellation, booking rules               |
+| E2E           | `npm run test:e2e`                  | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport                             |
+| API           | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation |
+| Accessibility | `npx playwright test accessibility` | axe-core WCAG 2.2 A/AA scan of every page type, in light and dark mode, including the form with errors          |
 
 CI runs all three on every pull request, plus lint, type check and a Docker build.
 In CI, the E2E tests run against the production build (`node .next/standalone/server.js`).

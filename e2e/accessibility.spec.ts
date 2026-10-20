@@ -1,0 +1,81 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+import { BookingCreatedResponse, EventDetailResponse } from "../src/server/api/schemas";
+
+// Automated WCAG 2.2 A/AA checks with axe-core, in light and dark mode, on every page type.
+// axe finds about a third of accessibility problems (contrast, names, labels, landmarks,
+// ARIA misuse); keyboard use and screen reader output are covered by the flow tests.
+
+const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+
+async function expectNoViolations(page: Page) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    // Elements with transition-colors fade to the new theme; measure contrast after the fade,
+    // not halfway between the light and dark colors.
+    // Only transitions: a looping skeleton pulse never finishes, and a removed element's
+    // transition is cancelled (its promise rejects), which also means it no longer matters.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((animation) => animation instanceof CSSTransition)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      ),
+    );
+    const { violations } = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    // Report each offending element with axe's explanation, not the whole result object.
+    const summary = violations.flatMap((v) =>
+      v.nodes.map((node) => `${v.id} at ${node.target.join(" ")}: ${node.any[0]?.message ?? v.help}`),
+    );
+    expect(summary, `${colorScheme} mode`).toEqual([]);
+  }
+}
+
+test("home and organizer pages", async ({ page }) => {
+  await page.goto("/");
+  await expectNoViolations(page);
+
+  await page.goto("/harbor-hall");
+  await expectNoViolations(page);
+});
+
+test("event page, including the form with validation errors", async ({ page }) => {
+  await page.goto("/harbor-hall/events/midnight-jazz-session");
+  await expect(page.getByRole("group", { name: "Choose your seats" })).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.getByRole("button", { name: "Book seats" }).click();
+  await expect(page.getByText("Enter your name.")).toBeVisible();
+  await expectNoViolations(page);
+});
+
+test("closed event page", async ({ page }) => {
+  await page.goto("/kyoto-chamber/events/new-year-concert");
+  await expect(page.getByText("This event has been cancelled.")).toBeVisible();
+  await expectNoViolations(page);
+});
+
+test("booking confirmation page", async ({ page, request }, testInfo) => {
+  // Book through the API, so this test does not depend on the booking form.
+  const api = "/api/v1/organizations/harbor-hall/events/midnight-jazz-session";
+  const { data: event } = EventDetailResponse.parse(await (await request.get(api)).json());
+  const seatNumber = testInfo.project.name === "mobile" ? 2 : 1;
+  const seat = event.sections
+    .find((section) => section.name === "Balcony")
+    ?.seats.find((s) => s.row === "C" && s.number === seatNumber);
+  const created = await request.post(`${api}/bookings`, {
+    data: { customerName: "Mio Ito", customerEmail: "mio@example.com", seatIds: [seat!.id] },
+  });
+  const { data: booking } = BookingCreatedResponse.parse(await created.json());
+
+  await page.goto(booking.links.page);
+  await expect(page.getByText("Booking confirmed")).toBeVisible();
+  await expectNoViolations(page);
+});
+
+test("not found page", async ({ page }) => {
+  await page.goto("/harbor-hall/events/no-such-event");
+  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await expectNoViolations(page);
+});
