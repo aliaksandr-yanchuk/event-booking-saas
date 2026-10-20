@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { API_BOOKING_STATUS, effectiveStatus } from "@/lib/booking-status";
 import type { BookingDetailsResponse, EventDetail, EventSummary } from "@/server/api/schemas";
 import type { BookingDetails } from "@/server/repositories/bookings";
 import type { PublicEvent, SeatMap } from "@/server/repositories/events";
@@ -66,7 +67,8 @@ export function toEventDetail(event: PublicEvent, seatMap: SeatMap): z.output<ty
 export function toBookingDetails(booking: BookingDetails): z.output<typeof BookingDetailsResponse>["data"] {
   return {
     reference: booking.reference,
-    status: booking.status === "CANCELLED" ? "cancelled" : "confirmed",
+    status: API_BOOKING_STATUS[effectiveStatus(booking)],
+    expiresAt: effectiveStatus(booking) === "PENDING" ? booking.expiresAt!.toISOString() : null,
     customerName: booking.customerName,
     seats: booking.seatLabels,
     totalMinor: booking.totalMinor,

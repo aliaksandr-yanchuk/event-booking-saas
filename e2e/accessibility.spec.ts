@@ -56,7 +56,7 @@ test("closed event page", async ({ page }) => {
   await expectNoViolations(page);
 });
 
-test("booking confirmation page", async ({ page, request }, testInfo) => {
+test("booking page awaiting payment, and the demo checkout", async ({ page, request }, testInfo) => {
   // Book through the API, so this test does not depend on the booking form.
   const api = "/api/v1/organizations/harbor-hall/events/midnight-jazz-session";
   const { data: event } = EventDetailResponse.parse(await (await request.get(api)).json());
@@ -70,6 +70,14 @@ test("booking confirmation page", async ({ page, request }, testInfo) => {
   const { data: booking } = BookingCreatedResponse.parse(await created.json());
 
   await page.goto(booking.links.page);
+  await expect(page.getByText("Awaiting payment")).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto(booking.links.checkout!);
+  await expect(page.getByText("Demo checkout.")).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.getByRole("button", { name: /^Pay / }).click();
   await expect(page.getByText("Booking confirmed")).toBeVisible();
   await expectNoViolations(page);
 });

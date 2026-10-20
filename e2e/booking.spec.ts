@@ -9,7 +9,7 @@ function rowFor(projectName: string) {
 const seat = (page: Page, section: string, row: string, number: number) =>
   page.getByRole("checkbox", { name: `${section}, row ${row}, seat ${number}`, exact: true });
 
-test("a visitor finds an event, books two seats and sees them taken afterwards", async ({ page }, testInfo) => {
+test("a visitor finds an event, holds two seats, pays and sees them taken afterwards", async ({ page }, testInfo) => {
   const row = rowFor(testInfo.project.name);
 
   await page.goto("/");
@@ -28,33 +28,65 @@ test("a visitor finds an event, books two seats and sees them taken afterwards",
   await expect(page.getByTestId("booking-total")).toHaveText("¥16,000");
 
   // Submitting without contact details shows field errors and keeps the selection.
-  await page.getByRole("button", { name: "Book 2 seats · ¥16,000" }).click();
+  const submit = page.getByRole("button", { name: "Continue to payment · 2 seats · ¥16,000" });
+  await submit.click();
   await expect(page.getByText("Enter your name.")).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveAttribute("aria-invalid", "true");
   await expect(seat(page, "Floor", row, 1)).toBeChecked();
 
   await page.getByLabel("Full name").fill("Aiko Tanaka");
   await page.getByLabel("Email").fill("aiko@example.com");
-  await page.getByRole("button", { name: "Book 2 seats · ¥16,000" }).click();
+  await submit.click();
+
+  // The seats are held while the customer pays (the demo checkout stands in for Stripe).
+  await expect(page.getByRole("heading", { name: "Midnight Jazz Session" })).toBeVisible();
+  await expect(page.getByText("Demo checkout.")).toBeVisible();
+  await page.getByRole("button", { name: "Pay ¥16,000" }).click();
 
   await expect(page.getByText("Booking confirmed")).toBeVisible();
   await expect(page.getByTestId("booking-reference")).toHaveText(/^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$/);
-  await expect(page.getByText(`Floor · Row ${row} · Seat 1`)).toBeVisible();
-  await expect(page.getByText("¥16,000")).toBeVisible();
+  // Next.js keeps recently visited pages mounted but hidden (React Activity), and the
+  // checkout page lists the same seats, so only visible matches count.
+  await expect(page.getByText(`Floor · Row ${row} · Seat 1`).filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("¥16,000").filter({ visible: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Back to the event" }).click();
   await expect(page.getByRole("checkbox", { name: `Floor, row ${row}, seat 1, taken` })).toBeDisabled();
 });
 
-test("a customer cancels a booking with their email, which releases the seat", async ({ page }, testInfo) => {
+test("a customer who leaves the checkout can release the held seats", async ({ page }, testInfo) => {
+  const number = testInfo.project.name === "mobile" ? 4 : 3;
+
+  await page.goto("/harbor-hall/events/midnight-jazz-session");
+  await seat(page, "Balcony", "C", number).check({ force: true });
+  await page.getByLabel("Full name").fill("Yui Kato");
+  await page.getByLabel("Email").fill("yui@example.com");
+  await page.getByRole("button", { name: /Continue to payment/ }).click();
+  await page.getByRole("link", { name: "Cancel and go back" }).click();
+
+  // Back on the booking page: still held, with the way back to the checkout.
+  await expect(page.getByText("Awaiting payment")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue to payment" })).toBeVisible();
+
+  await page.getByLabel("Email used for the booking").fill("yui@example.com");
+  await page.getByRole("button", { name: "Release seats" }).click();
+  await expect(page.getByText("Booking cancelled")).toBeVisible();
+
+  await page.getByRole("link", { name: "Back to the event" }).click();
+  await expect(seat(page, "Balcony", "C", number)).toBeEnabled();
+});
+
+test("a customer cancels a paid booking with their email, which releases the seat", async ({ page }, testInfo) => {
   const row = testInfo.project.name === "mobile" ? "C" : "A";
 
   await page.goto("/harbor-hall/events/indie-rock-night");
   await seat(page, "Balcony", row, 1).check({ force: true });
   await page.getByLabel("Full name").fill("Ken Sato");
   await page.getByLabel("Email").fill("ken@example.com");
-  await page.getByRole("button", { name: /Book 1 seat/ }).click();
+  await page.getByRole("button", { name: /Continue to payment · 1 seat/ }).click();
+  await page.getByRole("button", { name: /^Pay / }).click();
   await expect(page.getByText("Booking confirmed")).toBeVisible();
+  await expect(page.getByText("Cancel before the event starts for a full refund.")).toBeVisible();
 
   const emailField = page.getByLabel("Email used for the booking");
   await emailField.fill("wrong@example.com");
@@ -64,10 +96,23 @@ test("a customer cancels a booking with their email, which releases the seat", a
   await emailField.fill("ken@example.com");
   await page.getByRole("button", { name: "Cancel booking" }).click();
   await expect(page.getByText("Booking cancelled")).toBeVisible();
-  await expect(page.getByText("Your seats have been released.")).toBeVisible();
+  await expect(page.getByText("Your seats have been released. Your payment has been refunded in full.")).toBeVisible();
 
   await page.getByRole("link", { name: "Back to the event" }).click();
   await expect(seat(page, "Balcony", row, 1)).toBeEnabled();
+});
+
+test("free seats are confirmed at once, without a checkout", async ({ page }, testInfo) => {
+  const number = testInfo.project.name === "mobile" ? 2 : 1;
+
+  await page.goto("/kyoto-chamber/events/open-rehearsal");
+  await expect(page.getByText("Hall · Free")).toBeVisible();
+  await seat(page, "Hall", "A", number).check({ force: true });
+  await page.getByLabel("Full name").fill("Sora Abe");
+  await page.getByLabel("Email").fill("sora@example.com");
+  await page.getByRole("button", { name: "Book 1 seat" }).click();
+
+  await expect(page.getByText("Booking confirmed")).toBeVisible();
 });
 
 test("event pages expose structured data and a canonical URL", async ({ page }) => {

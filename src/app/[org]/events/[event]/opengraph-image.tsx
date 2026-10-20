@@ -93,7 +93,7 @@ export default async function Image({ params }: { params: Promise<{ org: string;
               color: colors.accent,
             }}
           >
-            from {formatMoney(Math.min(...prices), event.currency)}
+            {Math.min(...prices) === 0 ? "Free" : `from ${formatMoney(Math.min(...prices), event.currency)}`}
           </span>
         )}
       </div>

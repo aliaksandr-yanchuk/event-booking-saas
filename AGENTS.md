@@ -18,6 +18,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   Do not replace it with an application-level check or a lock.
 - Schema changes go through `npx prisma migrate dev --name <change>`; commit the migration.
 
+### Payments
+
+- Booking states change only in `src/server/booking-service.ts` and `src/server/payment-service.ts`.
+  Every transition is an `UPDATE … WHERE status = <expected>`, so repeated reports of the
+  same payment are no-ops. Never update a booking's status unconditionally.
+- Held seats are protected by the same UNIQUE constraint as sold ones. Reads that decide
+  whether a seat is free use `activeSeatWhere(now)` from `src/server/holds.ts`.
+- Call the payment provider outside database transactions; refunds always pass an
+  idempotency key.
+- Tests use `createFakePayments()`; E2E runs against the demo checkout, never Stripe.
+
 ### Caching
 
 - Cached reads live in `src/server/queries.ts` (`"use cache"` + `cacheLife` + `cacheTag`).

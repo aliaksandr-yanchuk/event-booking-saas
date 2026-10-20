@@ -1,4 +1,4 @@
-import { formatMoney, sumMinor } from "./money";
+import { formatMoney, formatPrice, sumMinor } from "./money";
 
 describe("formatMoney", () => {
   it("formats JPY, which has no minor unit", () => {
@@ -11,6 +11,13 @@ describe("formatMoney", () => {
 
   it("formats zero", () => {
     expect(formatMoney(0, "JPY")).toBe("¥0");
+  });
+});
+
+describe("formatPrice", () => {
+  it("shows free seats as Free and everything else as money", () => {
+    expect(formatPrice(0, "JPY")).toBe("Free");
+    expect(formatPrice(6000, "JPY")).toBe("¥6,000");
   });
 });
 

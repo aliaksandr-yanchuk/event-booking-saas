@@ -8,9 +8,11 @@ import { submitWithoutReset } from "@/lib/submit-without-reset";
 
 type CancelBookingFormProps = {
   action: (state: CancelFormState, formData: FormData) => Promise<CancelFormState>;
+  // "Cancel booking" for a confirmed booking, "Release seats" for a hold.
+  submitLabel?: string;
 };
 
-export function CancelBookingForm({ action }: CancelBookingFormProps) {
+export function CancelBookingForm({ action, submitLabel = "Cancel booking" }: CancelBookingFormProps) {
   const [state, formAction, pending] = useActionState(action, { status: "idle" });
 
   return (
@@ -26,7 +28,7 @@ export function CancelBookingForm({ action }: CancelBookingFormProps) {
       />
       <div>
         <button type="submit" className={buttonClasses("danger")} disabled={pending}>
-          {pending ? "Cancelling…" : "Cancel booking"}
+          {pending ? "Cancelling…" : submitLabel}
         </button>
       </div>
     </form>

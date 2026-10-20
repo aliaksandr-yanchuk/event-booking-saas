@@ -96,7 +96,9 @@ export function buildOpenApiDocument() {
           requestBody: { required: true, ...json("CreateBookingRequest") },
           responses: {
             201: {
-              description: "Booking confirmed",
+              description:
+                "Booking created: pending_payment with a checkout link for paid seats (held until " +
+                "expiresAt), or confirmed for free ones",
               headers: {
                 Location: { description: "API URL of the new booking", schema: { type: "string" } },
                 "Idempotent-Replayed": {
@@ -115,6 +117,10 @@ export function buildOpenApiDocument() {
                 "or the Idempotency-Key was used for a different request (IDEMPOTENCY_KEY_REUSED)",
             ),
             429: rateLimitedResponse,
+            502: problemResponse(
+              "The seats are held, but the checkout could not be created (PAYMENT_UNAVAILABLE). " +
+                "Retry with the same Idempotency-Key to get the checkout link.",
+            ),
           },
         },
       },

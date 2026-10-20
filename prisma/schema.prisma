@@ -107,9 +107,20 @@ model Seat {
   @@map("seats")
 }
 
+// PENDING ──paid──▶ CONFIRMED ──cancel──▶ CANCELLED (refunded if it was paid)
+//    │                ▲
+//    ├─cancel─▶ CANCELLED
+//    └─hold expired─▶ EXPIRED ──paid late──▶ CONFIRMED if the seats are still free,
+//                                            otherwise REFUNDED
 enum BookingStatus {
+  // Awaiting payment. Holds its seats until expiresAt.
+  PENDING
   CONFIRMED
   CANCELLED
+  // The hold ran out before payment; the seats were released.
+  EXPIRED
+  // Paid after the hold expired, but someone else had taken a seat by then.
+  REFUNDED
 }
 
 model Booking {
@@ -121,10 +132,21 @@ model Booking {
   customerEmail  String
   status         BookingStatus @default(CONFIRMED)
   totalMinor     Int
-  // Copied at booking time, so a cancelled booking still shows what was bought.
+  // Copied at booking time, so a cancelled booking still shows what was bought,
+  // and a payment that arrives after the hold expired knows which seats to take back.
   seatLabels     String[]
+  seatIds        String[]
   createdAt      DateTime      @default(now())
   cancelledAt    DateTime?
+
+  // Payment. A PENDING booking holds its seats until expiresAt.
+  expiresAt         DateTime?
+  paymentProvider   String?
+  checkoutSessionId String?   @unique
+  checkoutUrl       String?
+  paymentId         String?
+  paidAt            DateTime?
+  refundedAt        DateTime?
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -132,6 +154,8 @@ model Booking {
   idempotencyKey IdempotencyKey?
 
   @@index([organizationId, eventId])
+  // Finds stale holds to release.
+  @@index([status, expiresAt])
   @@map("bookings")
 }
 

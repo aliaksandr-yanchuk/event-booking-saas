@@ -2,10 +2,13 @@
 
 import { refresh, updateTag } from "next/cache";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { cancelBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { beginCheckout } from "@/server/checkout";
+import { getPaymentProvider } from "@/server/payments";
 import { getOrganization } from "@/server/queries";
 import { limitCancellation, retryAfterMessage } from "@/server/rate-limit";
 
@@ -34,7 +37,7 @@ export async function cancelBookingAction(
     return { status: "error", message: retryAfterMessage(limit.retryAfterSeconds) };
   }
 
-  const result = await cancelBooking(db, {
+  const result = await cancelBooking(db, getPaymentProvider(), {
     organizationId: organization.id,
     reference,
     customerEmail: email.data,
@@ -54,4 +57,15 @@ export async function cancelBookingAction(
   // Re-render the page so it shows the cancelled state.
   refresh();
   return { status: "idle" };
+}
+
+/** "Continue to payment" on a pending booking: resumes its checkout (or creates it). */
+export async function continueToPaymentAction(orgSlug: string, reference: string) {
+  const organization = await getOrganization(orgSlug);
+  if (!organization) {
+    redirect(`/${orgSlug}/bookings/${reference}`);
+  }
+  const checkout = await beginCheckout(organization, reference);
+  // Not pending any more (paid meanwhile, or expired): the booking page shows the state.
+  redirect(checkout.ok ? checkout.url : `/${orgSlug}/bookings/${reference}`);
 }

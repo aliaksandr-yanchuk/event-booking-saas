@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { bookingInputSchema } from "@/lib/booking-input";
+import { API_BOOKING_STATUS } from "@/lib/booking-status";
 
 /**
  * The public API contract, defined once in Zod and used three ways:
@@ -37,6 +38,7 @@ export const PROBLEM_CODES = [
   "EVENT_STARTED",
   "IDEMPOTENCY_KEY_REUSED",
   "RATE_LIMITED",
+  "PAYMENT_UNAVAILABLE",
 ] as const;
 
 export const Problem = z
@@ -119,19 +121,34 @@ export const EventDetailResponse = z
 
 // ---- Bookings ----
 
+const bookingStatus = z
+  .enum(API_BOOKING_STATUS)
+  .describe(
+    "pending_payment: seats are held until expiresAt, pay at links.checkout. " +
+      "confirmed: paid (or free). cancelled: cancelled by the customer, refunded if paid. " +
+      "expired: the hold ran out before payment. refunded: paid after the hold expired, " +
+      "when a seat had been taken meanwhile",
+  );
+const holdExpiry = isoDateTime.nullable().describe("With pending_payment: when the hold on the seats ends");
+
 const bookingLinks = z.strictObject({
   self: z.string().describe("API URL of the booking"),
   page: z.string().describe("Web page of the booking"),
+  checkout: z
+    .string()
+    .nullable()
+    .describe("With pending_payment: where the customer pays (Stripe Checkout, or this site's demo checkout)"),
 });
 
 export const BookingCreatedResponse = z
   .strictObject({
     data: z.strictObject({
       reference: z.string(),
-      status: z.literal("confirmed"),
+      status: bookingStatus,
       totalMinor: minorUnits,
       currency,
       seatIds: z.array(z.string()),
+      expiresAt: holdExpiry,
       links: bookingLinks,
     }),
   })
@@ -141,7 +158,8 @@ export const BookingDetailsResponse = z
   .strictObject({
     data: z.strictObject({
       reference: z.string(),
-      status: z.enum(["confirmed", "cancelled"]),
+      status: bookingStatus,
+      expiresAt: holdExpiry,
       customerName: z.string(),
       seats: z.array(z.string()).describe("Seat labels, copied at booking time"),
       totalMinor: minorUnits,

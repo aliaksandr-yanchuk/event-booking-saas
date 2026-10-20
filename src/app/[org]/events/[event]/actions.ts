@@ -7,6 +7,7 @@ import { parseBookingForm, type BookingFieldErrors } from "@/lib/booking-input";
 import { parseIdempotencyKey } from "@/lib/idempotency-key";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
+import { beginCheckout } from "@/server/checkout";
 import { db } from "@/server/db";
 import { getOrganization, getPublicEvent } from "@/server/queries";
 import { limitBooking, retryAfterMessage } from "@/server/rate-limit";
@@ -104,5 +105,27 @@ export async function bookSeatsAction(
   }
 
   updateTag(cacheTags.eventAvailability(event.id));
-  redirect(`/${orgSlug}/bookings/${result.reference}`);
+
+  // Paid seats are held now; send the customer to pay. A free booking is already confirmed.
+  const bookingPage = `/${orgSlug}/bookings/${result.reference}`;
+  if (result.status === "PENDING") {
+    const checkout = await openCheckout(organization, result.reference);
+    // Not ok: the hold has meanwhile been paid, cancelled or has expired (a replayed
+    // submit); the booking page shows which.
+    redirect(checkout?.ok ? checkout.url : bookingPage);
+  }
+  redirect(bookingPage);
+}
+
+/**
+ * The checkout is created after the hold. If the provider is unreachable, the seats
+ * stay held and the booking page offers "Continue to payment", which tries again.
+ */
+async function openCheckout(organization: { id: string; slug: string }, reference: string) {
+  try {
+    return await beginCheckout(organization, reference);
+  } catch (error) {
+    console.error("Could not start the checkout", { reference, error });
+    return null;
+  }
 }

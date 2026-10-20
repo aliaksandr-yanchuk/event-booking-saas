@@ -87,6 +87,7 @@ async function createEvent(
         customerEmail: `demo${index}@example.com`,
         totalMinor: seats.reduce((sum, seat) => sum + seat.section.priceMinor, 0),
         seatLabels: seats.map((seat) => `${seat.section.name} · Row ${seat.row} · Seat ${seat.number}`),
+        seatIds: seats.map((seat) => seat.id),
         seats: { create: seats.map((seat) => ({ seatId: seat.id })) },
       },
     });
@@ -208,7 +209,22 @@ async function main() {
     sections: [{ name: "S", priceMinor: 7000, rows: ROWS("A", 2), seatsPerRow: 10 }],
   });
 
-  console.log("Seeded 2 organizers and 5 events.");
+  // Free seats are confirmed at once, without a checkout.
+  await createEvent(db, {
+    organizationId: kyoto.id,
+    venueId: kyotoVenue.id,
+    slug: "open-rehearsal",
+    title: "Open Rehearsal",
+    summary: "Watch the orchestra prepare the autumn program. Free, with reserved seats.",
+    description:
+      "A working rehearsal open to the public. Seats are free but limited, so please reserve one. " +
+      "The conductor takes questions at the end.",
+    startsInDays: 8,
+    durationHours: 2,
+    sections: [{ name: "Hall", priceMinor: 0, rows: ROWS("A", 3), seatsPerRow: 12 }],
+  });
+
+  console.log("Seeded 2 organizers and 6 events.");
   await db.$disconnect();
 }
 

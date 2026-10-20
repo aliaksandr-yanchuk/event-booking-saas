@@ -42,8 +42,8 @@ test("lists an organizer's upcoming events", async ({ request }) => {
   const body = await parse(response, EventListResponse);
   expect(body.organizer).toEqual({ slug: "kyoto-chamber", name: "Kyoto Chamber Orchestra" });
   // The cancelled New Year Concert is not "upcoming".
-  expect(body.data.map((event) => event.slug)).toEqual(["autumn-strings"]);
-  expect(body.data[0].priceRange).toEqual({ currency: "JPY", minMinor: 6000, maxMinor: 9000 });
+  expect(body.data.map((event) => event.slug)).toEqual(["open-rehearsal", "autumn-strings"]);
+  expect(body.data[1].priceRange).toEqual({ currency: "JPY", minMinor: 6000, maxMinor: 9000 });
 });
 
 test("returns event details with live availability, revalidated on every request", async ({ request }) => {
@@ -67,14 +67,24 @@ test("returns event details with live availability, revalidated on every request
   expect(taken).toEqual(expect.arrayContaining(["SB6", "SB7", "SB8", "SB9"]));
 });
 
-test("books seats, then fetches and cancels the booking", async ({ request }) => {
+test("holds paid seats with a checkout link, then fetches and releases the hold", async ({ request }) => {
   const seat = await findSeat(request, "A", "G", 1);
   expect(seat.available).toBe(true);
 
   const created = await book(request, [seat.id]);
   expect(created.status()).toBe(201);
   const { data: booking } = await parse(created, BookingCreatedResponse);
-  expect(booking).toMatchObject({ status: "confirmed", totalMinor: 6000, currency: "JPY", seatIds: [seat.id] });
+  expect(booking).toMatchObject({
+    status: "pending_payment",
+    totalMinor: 6000,
+    currency: "JPY",
+    seatIds: [seat.id],
+    links: { checkout: expect.stringMatching(/^\/checkout\/demo\/demo_cs_/) },
+  });
+  // Held for 35 minutes: a 30-minute checkout plus a few minutes of grace.
+  const holdMinutes = (Date.parse(booking.expiresAt!) - Date.now()) / 60_000;
+  expect(holdMinutes).toBeGreaterThan(34);
+  expect(holdMinutes).toBeLessThanOrEqual(35);
   const location = created.headers()["location"];
   expect(location).toBe(`/api/v1/organizations/kyoto-chamber/bookings/${booking.reference}`);
 
@@ -82,7 +92,12 @@ test("books seats, then fetches and cancels the booking", async ({ request }) =>
   expect(fetched.status()).toBe(200);
   // The strict schema also proves the customer's email is not in the response.
   const { data: details } = await parse(fetched, BookingDetailsResponse);
-  expect(details).toMatchObject({ reference: booking.reference, status: "confirmed", seats: ["A · Row G · Seat 1"] });
+  expect(details).toMatchObject({
+    reference: booking.reference,
+    status: "pending_payment",
+    expiresAt: booking.expiresAt,
+    seats: ["A · Row G · Seat 1"],
+  });
 
   expect((await findSeat(request, "A", "G", 1)).available).toBe(false);
 

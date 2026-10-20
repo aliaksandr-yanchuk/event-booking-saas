@@ -1,4 +1,5 @@
 import type { Db } from "@/server/db";
+import { activeSeatWhere } from "@/server/holds";
 
 /**
  * Read models for the public pages. Every function takes an organizationId:
@@ -73,8 +74,11 @@ export async function findPublicEvent(db: Db, organizationId: string, slug: stri
 
 export type PublicEvent = NonNullable<Awaited<ReturnType<typeof findPublicEvent>>>;
 
-/** Seat map with live availability. Never cached: it must reflect the latest bookings. */
-export async function getSeatMap(db: Db, eventId: string) {
+/**
+ * Seat map with live availability. Never cached: it must reflect the latest bookings.
+ * A seat is taken while it is sold or held; a hold that has run out does not count.
+ */
+export async function getSeatMap(db: Db, eventId: string, now = new Date()) {
   const sections = await db.section.findMany({
     where: { eventId },
     orderBy: { sortOrder: "asc" },
@@ -83,7 +87,12 @@ export async function getSeatMap(db: Db, eventId: string) {
       name: true,
       priceMinor: true,
       seats: {
-        select: { id: true, row: true, number: true, bookingSeats: { select: { seatId: true } } },
+        select: {
+          id: true,
+          row: true,
+          number: true,
+          bookingSeats: { where: activeSeatWhere(now), select: { seatId: true } },
+        },
       },
     },
   });
@@ -103,10 +112,10 @@ export async function getSeatMap(db: Db, eventId: string) {
 
 export type SeatMap = Awaited<ReturnType<typeof getSeatMap>>;
 
-export async function countAvailableSeats(db: Db, eventId: string) {
+export async function countAvailableSeats(db: Db, eventId: string, now = new Date()) {
   const [total, taken] = await Promise.all([
     db.seat.count({ where: { eventId } }),
-    db.bookingSeat.count({ where: { seat: { eventId } } }),
+    db.bookingSeat.count({ where: { seat: { eventId }, ...activeSeatWhere(now) } }),
   ]);
   return total - taken;
 }

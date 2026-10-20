@@ -62,7 +62,28 @@ describe("BookingForm", () => {
     expect(within(summary).getByText("Floor · Row A · Seat 1")).toBeInTheDocument();
     expect(within(summary).getByText("Balcony · Row A · Seat 1")).toBeInTheDocument();
     expect(screen.getByTestId("booking-total")).toHaveTextContent("¥13,000");
-    expect(screen.getByRole("button", { name: "Book 2 seats · ¥13,000" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Continue to payment · 2 seats · ¥13,000" })).toBeEnabled();
+  });
+
+  it("books free seats directly instead of continuing to payment", async () => {
+    const free: SeatMap = [
+      { id: "hall", name: "Hall", priceMinor: 0, seats: [{ id: "h-a1", row: "A", number: 1, taken: false }] },
+    ];
+    render(
+      <BookingForm
+        action={jest.fn()}
+        sections={free}
+        currency="JPY"
+        maxSeats={6}
+        idempotencyKey="k"
+        availabilityUrl="/api/v1/organizations/kyoto-chamber/events/open-rehearsal"
+      />,
+    );
+
+    await userEvent.setup().click(seat("Hall, row A, seat 1"));
+
+    expect(screen.getByText("Hall")).toHaveTextContent("Hall · Free");
+    expect(screen.getByRole("button", { name: "Book 1 seat" })).toBeEnabled();
   });
 
   it("removes a seat when it is clicked again", async () => {
@@ -98,7 +119,7 @@ describe("BookingForm", () => {
     await user.click(seat("Floor, row A, seat 3"));
     await user.type(screen.getByLabelText("Full name"), "Aiko Tanaka");
     await user.type(screen.getByLabelText("Email"), "aiko@example.com");
-    await act(() => user.click(screen.getByRole("button", { name: /Book 2 seats/ })));
+    await act(() => user.click(screen.getByRole("button", { name: /Continue to payment · 2 seats/ })));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("just booked by someone else");
     expect(seat("Floor, row A, seat 1, taken")).toBeDisabled();
@@ -118,7 +139,7 @@ describe("BookingForm", () => {
     const { user } = renderForm(action);
 
     await user.click(seat("Floor, row A, seat 1"));
-    await act(() => user.click(screen.getByRole("button", { name: /Book 1 seat/ })));
+    await act(() => user.click(screen.getByRole("button", { name: /Continue to payment · 1 seat/ })));
 
     expect(await screen.findByText("Enter your name.")).toBeInTheDocument();
     expect(seat("Floor, row A, seat 1")).toBeChecked();
@@ -131,8 +152,8 @@ describe("BookingForm", () => {
     const { user } = renderForm(action);
 
     await user.click(seat("Floor, row A, seat 1"));
-    await act(() => user.click(screen.getByRole("button", { name: /Book 1 seat/ })));
-    await act(() => user.click(screen.getByRole("button", { name: /Book 1 seat/ })));
+    await act(() => user.click(screen.getByRole("button", { name: /Continue to payment · 1 seat/ })));
+    await act(() => user.click(screen.getByRole("button", { name: /Continue to payment · 1 seat/ })));
 
     const keys = action.mock.calls.map((call) =>
       (call as unknown as [BookingFormState, FormData])[1].get("idempotencyKey"),

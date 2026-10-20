@@ -5,7 +5,7 @@ import type { BookingFormState } from "@/app/[org]/events/[event]/actions";
 import { buttonClasses } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { useLiveTakenSeats } from "@/components/use-live-taken-seats";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatPrice } from "@/lib/money";
 import { groupSeatsByRow } from "@/lib/seats";
 import { submitWithoutReset } from "@/lib/submit-without-reset";
 import type { SeatMap } from "@/server/repositories/events";
@@ -83,6 +83,14 @@ export function BookingForm({
 
   const seatError = state.fieldErrors?.seatIds;
 
+  // Paid seats are held and the customer goes on to pay; free seats are booked at once.
+  function submitLabel() {
+    if (pending) return total > 0 ? "Holding your seats…" : "Booking…";
+    if (selectedSeats.length === 0) return "Book seats";
+    const seatCount = `${selectedSeats.length} ${selectedSeats.length === 1 ? "seat" : "seats"}`;
+    return total > 0 ? `Continue to payment · ${seatCount} · ${formatMoney(total, currency)}` : `Book ${seatCount}`;
+  }
+
   return (
     // Without the reset guard, a failed submit would uncheck the seat checkboxes
     // while `selected` still holds them, and the next submit would send no seats.
@@ -102,7 +110,7 @@ export function BookingForm({
         {sections.map((section) => (
           <div key={section.id} className="flex flex-col gap-3">
             <h3 className="font-medium">
-              {section.name} <span className="text-muted">· {formatMoney(section.priceMinor, currency)}</span>
+              {section.name} <span className="text-muted">· {formatPrice(section.priceMinor, currency)}</span>
             </h3>
             <div className="overflow-x-auto pb-2">
               <div className="flex min-w-max flex-col gap-1.5">
@@ -211,11 +219,7 @@ export function BookingForm({
 
       <div>
         <button type="submit" className={buttonClasses("primary", "w-full sm:w-auto")} disabled={pending}>
-          {pending
-            ? "Booking…"
-            : selectedSeats.length > 0
-              ? `Book ${selectedSeats.length} ${selectedSeats.length === 1 ? "seat" : "seats"} · ${formatMoney(total, currency)}`
-              : "Book seats"}
+          {submitLabel()}
         </button>
       </div>
     </form>

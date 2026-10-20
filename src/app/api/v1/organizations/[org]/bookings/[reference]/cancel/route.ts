@@ -4,6 +4,7 @@ import { BookingCancelledResponse, CancelBookingRequest, jsonResponse } from "@/
 import { cancelBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { getPaymentProvider } from "@/server/payments";
 import { getOrganization } from "@/server/queries";
 import { limitCancellation } from "@/server/rate-limit";
 
@@ -11,6 +12,8 @@ import { limitCancellation } from "@/server/rate-limit";
  * POST /api/v1/organizations/{org}/bookings/{reference}/cancel
  * Body: { "customerEmail": string }
  *
+ * Works for a hold (releases the seats before payment) and for a confirmed booking
+ * (refunded if it was paid).
  * A POST to a sub-resource rather than DELETE: the request needs a body (the email
  * as a second factor), and the booking is kept with status "cancelled", not removed.
  */
@@ -42,7 +45,7 @@ export async function POST(
     return rateLimited(limit.retryAfterSeconds);
   }
 
-  const result = await cancelBooking(db, {
+  const result = await cancelBooking(db, getPaymentProvider(), {
     organizationId: organization.id,
     reference,
     customerEmail: body.data.customerEmail,

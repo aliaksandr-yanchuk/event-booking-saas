@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { BookingForm } from "@/components/booking-form";
 import { formatEventDate, formatEventTime } from "@/lib/dates";
 import { buildEventJsonLd, serializeJsonLd } from "@/lib/json-ld";
-import { formatMoney } from "@/lib/money";
+import { formatPrice } from "@/lib/money";
 import { absoluteUrl } from "@/lib/site";
 import type { PublicEvent } from "@/server/repositories/events";
 import { getAvailableSeatCount, getOrganization, getPublicEvent, getSeatMap } from "@/server/queries";
@@ -79,7 +79,7 @@ async function EventContent({ params }: Pick<Props, "params">) {
           <dt className="text-muted">Prices</dt>
           <dd>
             {event.sections
-              .map((section) => `${section.name} ${formatMoney(section.priceMinor, event.currency)}`)
+              .map((section) => `${section.name} ${formatPrice(section.priceMinor, event.currency)}`)
               .join(" · ")}
           </dd>
         </dl>

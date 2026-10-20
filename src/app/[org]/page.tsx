@@ -70,7 +70,9 @@ async function OrganizationEvents({ params }: Pick<PageProps<"/[org]">, "params"
                     </p>
                   </div>
                   {Number.isFinite(lowestPrice) && (
-                    <p className="shrink-0 text-sm font-medium">from {formatMoney(lowestPrice, event.currency)}</p>
+                    <p className="shrink-0 text-sm font-medium">
+                      {lowestPrice === 0 ? "Free" : `from ${formatMoney(lowestPrice, event.currency)}`}
+                    </p>
                   )}
                 </article>
               </li>

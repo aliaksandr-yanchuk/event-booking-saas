@@ -8,6 +8,7 @@ import {
   customer,
   resetDatabase,
 } from "../../test/integration/factories";
+import { createFakePayments } from "../../test/integration/fake-payments";
 
 let db: Db;
 
@@ -236,6 +237,8 @@ describe("createBooking with an idempotency key", () => {
 });
 
 describe("cancelBooking", () => {
+  const { provider: payments } = createFakePayments();
+
   async function bookOneSeat() {
     const organization = await createOrganization(db);
     const { event, seats } = await createEventWithSeats(db, organization.id);
@@ -252,13 +255,13 @@ describe("cancelBooking", () => {
   it("cancels the booking and puts the seat back on sale", async () => {
     const { organization, event, seats, reference } = await bookOneSeat();
 
-    const result = await cancelBooking(db, {
+    const result = await cancelBooking(db, payments, {
       organizationId: organization.id,
       reference,
       customerEmail: " AIKO@example.com ",
     });
 
-    expect(result).toEqual({ ok: true, eventId: event.id });
+    expect(result).toEqual({ ok: true, eventId: event.id, refunded: false });
     expect(await db.booking.findUnique({ where: { reference } })).toMatchObject({ status: "CANCELLED" });
 
     const rebooked = await createBooking(db, {
@@ -274,7 +277,7 @@ describe("cancelBooking", () => {
   it("requires the email used for the booking", async () => {
     const { organization, reference } = await bookOneSeat();
 
-    const result = await cancelBooking(db, {
+    const result = await cancelBooking(db, payments, {
       organizationId: organization.id,
       reference,
       customerEmail: "someone-else@example.com",
@@ -287,8 +290,8 @@ describe("cancelBooking", () => {
     const { organization, reference } = await bookOneSeat();
     const command = { organizationId: organization.id, reference, customerEmail: customer.customerEmail };
 
-    await cancelBooking(db, command);
-    expect(await cancelBooking(db, command)).toEqual({ ok: false, code: "ALREADY_CANCELLED" });
+    await cancelBooking(db, payments, command);
+    expect(await cancelBooking(db, payments, command)).toEqual({ ok: false, code: "ALREADY_CANCELLED" });
   });
 
   it("cannot cancel once the event has started", async () => {
@@ -296,6 +299,7 @@ describe("cancelBooking", () => {
 
     const result = await cancelBooking(
       db,
+      payments,
       { organizationId: organization.id, reference, customerEmail: customer.customerEmail },
       { now: new Date(event.startsAt.getTime() + 1) },
     );

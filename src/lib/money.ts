@@ -8,6 +8,11 @@ export function formatMoney(amountMinor: number, currency: string, locale = "en-
   return formatter.format(amountMinor / 10 ** fractionDigits);
 }
 
+/** A price as shown to customers: "Free" instead of "¥0". */
+export function formatPrice(amountMinor: number, currency: string, locale = "en-US"): string {
+  return amountMinor === 0 ? "Free" : formatMoney(amountMinor, currency, locale);
+}
+
 export function sumMinor(amounts: readonly number[]): number {
   return amounts.reduce((total, amount) => total + amount, 0);
 }

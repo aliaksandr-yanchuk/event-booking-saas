@@ -1,11 +1,13 @@
 import { revalidateTag } from "next/cache";
 import { parseBookingInput } from "@/lib/booking-input";
+import { API_BOOKING_STATUS, effectiveStatus } from "@/lib/booking-status";
 import { parseIdempotencyKey } from "@/lib/idempotency-key";
 import { problem, rateLimited, readJson } from "@/server/api/problem";
 import { resolveEvent } from "@/server/api/resolve";
 import { BookingCreatedResponse, jsonResponse } from "@/server/api/schemas";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
+import { beginCheckout } from "@/server/checkout";
 import { db } from "@/server/db";
 import { limitBooking } from "@/server/rate-limit";
 
@@ -19,6 +21,10 @@ import { limitBooking } from "@/server/rate-limit";
  * 415 not JSON, 429 too many attempts from this client, 422 the request is valid JSON but breaks a booking rule
  * (or reuses an idempotency key for a different request).
  * A retry with the same key gets the original 201 again, marked Idempotent-Replayed.
+ *
+ * Paid seats are held (status pending_payment) until the customer pays at links.checkout;
+ * free bookings are confirmed at once. 502 if the payment provider is unreachable: the
+ * seats are held, and a retry with the same Idempotency-Key returns the checkout link.
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/v1/organizations/[org]/events/[event]/bookings">) {
   const { org, event: eventSlug } = await ctx.params;
@@ -89,17 +95,43 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/organiza
   // expire: 0 drops the cached seat count now, so the next page view is up to date.
   revalidateTag(cacheTags.eventAvailability(event.id), { expire: 0 });
 
+  const status = effectiveStatus(result);
+  let checkoutUrl: string | null = null;
+  let expiresAt = result.expiresAt;
+  if (status === "PENDING") {
+    try {
+      const checkout = await beginCheckout(organization, result.reference);
+      if (checkout.ok) {
+        // Creating the checkout renews the hold.
+        checkoutUrl = checkout.url;
+        expiresAt = checkout.expiresAt;
+      }
+    } catch (error) {
+      console.error("Could not start the checkout", { reference: result.reference, error });
+      return problem(
+        502,
+        "PAYMENT_UNAVAILABLE",
+        "The seats are held, but the payment provider did not answer. Retry with the same Idempotency-Key.",
+      );
+    }
+  }
+
   const location = `/api/v1/organizations/${organization.slug}/bookings/${result.reference}`;
   return jsonResponse(
     BookingCreatedResponse,
     {
       data: {
         reference: result.reference,
-        status: "confirmed",
+        status: API_BOOKING_STATUS[status],
         totalMinor: result.totalMinor,
         currency: event.currency,
         seatIds: input.data.seatIds,
-        links: { self: location, page: `/${organization.slug}/bookings/${result.reference}` },
+        expiresAt: status === "PENDING" ? expiresAt!.toISOString() : null,
+        links: {
+          self: location,
+          page: `/${organization.slug}/bookings/${result.reference}`,
+          checkout: checkoutUrl,
+        },
       },
     },
     {

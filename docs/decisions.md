@@ -163,3 +163,60 @@ function running per visitor, and seat maps change rarely enough that 5 seconds 
 
 **Consequences.** Another visitor's booking shows up within about 5 seconds; the server
 still has the final word at submit.
+
+## 17. Paid seats are held by the same constraint, and released lazily (2026-10-20)
+
+**Context.** With payments, a booking is not final when the customer clicks "Book": the
+seats must be reserved while they pay, and released if they do not.
+
+**Decision.** A paid booking starts `PENDING` with an `expiresAt` and owns its
+`booking_seats` rows, so the UNIQUE constraint protects held seats as it does sold ones.
+Reads ignore holds that ran out. Expired holds are released inside the transaction of the
+next booking that wants one of their seats, by the provider's expiry notice, or by the
+customer. The hold (35 minutes) outlasts the checkout (30, Stripe's minimum).
+
+**Rejected.** A separate `holds` table: two places would decide whether a seat is free.
+A scheduled cleanup job as the only release path: correctness would depend on its
+schedule (Vercel's free plan runs cron jobs once a day).
+
+**Consequences.** A hold that nobody needs stays in the database as `PENDING` until
+something touches it; its status is shown as expired from the moment it runs out.
+
+## 18. Payment transitions are idempotent by state, not by an event log (2026-10-20)
+
+**Context.** The same payment can be reported several times: Stripe retries webhooks,
+the customer's return page checks the session, and a client can retry.
+
+**Decision.** Every transition is an `UPDATE … WHERE status = <expected>`. A repeated
+report finds the booking already `CONFIRMED` (or `REFUNDED`) and does nothing. A payment
+for an expired hold takes the seats back if the UNIQUE constraint allows it, and is
+refunded otherwise, with an idempotency key (`refund-<booking id>`) so a retried refund
+cannot pay out twice. Provider calls happen outside database transactions, so no row lock
+waits on the network.
+
+**Rejected.** A table of processed webhook event IDs: it deduplicates deliveries of the
+same event, but not the same payment reported by the webhook and by the return page.
+
+## 19. A provider interface with a demo checkout (2026-10-20)
+
+**Decision.** The booking flow talks to a `PaymentProvider` (create checkout, check
+status, expire, refund). Stripe implements it in production; without Stripe keys, a demo
+checkout page of this app does, and its "Pay" button calls the same `confirmPayment()`
+as the webhook.
+
+**Consequences.** Local development, CI and E2E tests need no Stripe account or network,
+and still run the real code after the payment. The demo checkout returns 404 as soon as
+Stripe is configured.
+
+## 20. The v1 booking API changed in place (2026-10-20)
+
+**Context.** `POST …/bookings` used to return `status: "confirmed"`. With payments, it
+returns `pending_payment` with a checkout link, and bookings can be `expired` or
+`refunded`. For a client that only expects `confirmed`, that is a breaking change, and
+`AGENTS.md` says breaking changes need a new version prefix.
+
+**Decision.** Changed in place, as an explicit exception: v1 has no clients outside this
+repository, and an unpaid v1 that confirms bookings would let anyone skip the payment.
+
+**Consequences.** With real API clients, this would have been `/api/v2`, with v1 kept
+working (and paid bookings rejected there) during a deprecation period.

@@ -29,7 +29,7 @@ test("the content security policy does not block anything the app needs", async 
   await page.getByRole("link", { name: "Midnight Jazz Session" }).click();
   // Hydrated: the client component reacts to the selection.
   await page.getByRole("checkbox", { name: "Balcony, row A, seat 3", exact: true }).check({ force: true });
-  await expect(page.getByRole("button", { name: /Book 1 seat/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Continue to payment · 1 seat/ })).toBeVisible();
 
   expect(violations).toEqual([]);
 });

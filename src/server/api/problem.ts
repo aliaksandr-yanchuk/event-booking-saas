@@ -24,6 +24,7 @@ const TITLES: Record<ProblemCode, string> = {
   EVENT_STARTED: "The event has already started",
   IDEMPOTENCY_KEY_REUSED: "This idempotency key was used for a different request",
   RATE_LIMITED: "Too many requests",
+  PAYMENT_UNAVAILABLE: "The payment provider is not available",
 };
 
 export function problem(

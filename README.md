@@ -4,9 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A reserved-seating booking service for live events, built as a portfolio project.
-Each organizer (tenant) gets its own event pages; visitors pick seats on a live seat map
-and the booking is confirmed immediately. **Two people can never book the same seat**,
-even when they click at the same moment.
+Each organizer (tenant) gets its own event pages; visitors pick seats on a live seat map,
+the seats are held while they pay, and the payment confirms the booking. **Two people can
+never book the same seat**, even when they click at the same moment.
 
 **Live demo: [event-booking-saas.vercel.app](https://event-booking-saas.vercel.app)** ·
 API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/openapi.json)
@@ -27,6 +27,7 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Backend & data modeling | PostgreSQL schema with Prisma 7, tenant-scoped repositories, transactional booking service with typed results                       |
 | Concurrency             | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests                             |
+| Payments                | Seat holds that expire, a checkout behind a provider interface, idempotent payment confirmation, late payments and refunds          |
 | REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
 | Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript            |
 | SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                     |
@@ -91,13 +92,13 @@ used in three places, so the documentation cannot drift from the code:
 3. **Contract tests:** the API tests parse every real response with its schema. The
    response schemas are strict, so a missing, renamed or extra field fails the test.
 
-| Method | Path                                               | Success                                                          | Errors                  |
-| ------ | -------------------------------------------------- | ---------------------------------------------------------------- | ----------------------- |
-| GET    | `/organizations/{org}/events`                      | 200, cacheable for 60 s                                          | 404                     |
-| GET    | `/organizations/{org}/events/{event}`              | 200 with live seat map, `no-cache` + `ETag` (304 when unchanged) | 404                     |
-| POST   | `/organizations/{org}/events/{event}/bookings`     | 201 + `Location`                                                 | 400, 404, 409, 415, 422 |
-| GET    | `/organizations/{org}/bookings/{reference}`        | 200 (no email in the response)                                   | 404                     |
-| POST   | `/organizations/{org}/bookings/{reference}/cancel` | 200                                                              | 400, 404, 409, 422      |
+| Method | Path                                               | Success                                                                          | Errors                            |
+| ------ | -------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------- |
+| GET    | `/organizations/{org}/events`                      | 200, cacheable for 60 s                                                          | 404                               |
+| GET    | `/organizations/{org}/events/{event}`              | 200 with live seat map, `no-cache` + `ETag` (304 when unchanged)                 | 404                               |
+| POST   | `/organizations/{org}/events/{event}/bookings`     | 201 + `Location`: `pending_payment` with a checkout link, or `confirmed` if free | 400, 404, 409, 415, 422, 429, 502 |
+| GET    | `/organizations/{org}/bookings/{reference}`        | 200 (no email in the response)                                                   | 404                               |
+| POST   | `/organizations/{org}/bookings/{reference}/cancel` | 200: releases a hold, or cancels and refunds a paid booking                      | 400, 404, 409, 422, 429           |
 
 ```bash
 curl -s -X POST http://localhost:3000/api/v1/organizations/harbor-hall/events/midnight-jazz-session/bookings \
@@ -153,6 +154,31 @@ does not depend on that check: if two requests pass it at the same time, Postgre
 rejects the second insert and its whole transaction rolls back. The integration test
 [`booking-service.int.test.ts`](src/server/booking-service.int.test.ts) fires 10
 concurrent bookings for one seat and asserts that exactly one wins, with no orphaned rows.
+
+**Seats are held while the customer pays.** A paid booking starts as `PENDING` and owns
+its `booking_seats` rows like a sold one, so the same UNIQUE constraint protects held
+seats. The hold lasts 35 minutes: the checkout closes after 30 (Stripe's minimum), and the
+extra minutes mean a payment made at the last second still finds its seats. Expired holds
+are released lazily, inside the transaction of the next booking that wants one of the
+seats (or by the provider's "checkout expired" notice), so no background job is needed
+for correctness; until then, every read ignores them. Payment confirmation is idempotent:
+every transition is an `UPDATE … WHERE status = <expected>`, so the webhook, the return
+page and a retry can all report the same payment safely. A payment that arrives after the
+hold expired takes the seats back if they are still free, and is refunded otherwise
+([`payment-service.ts`](src/server/payment-service.ts)). Integration tests cover each of
+these paths, including a late payment racing a new customer for the same seat.
+
+```
+PENDING ──paid──▶ CONFIRMED ──cancel──▶ CANCELLED (refunded)
+   ├──cancel──▶ CANCELLED
+   └──hold expired──▶ EXPIRED ──paid late──▶ CONFIRMED (seats still free) or REFUNDED
+```
+
+The checkout sits behind a small `PaymentProvider` interface
+([`provider.ts`](src/server/payments/provider.ts)). Without Stripe keys (locally, in CI,
+or on a demo), a built-in demo checkout stands in for it. Its "Pay" button calls the same
+`confirmPayment()` as the Stripe webhook, so the E2E tests exercise the real flow after
+the payment.
 
 **Idempotency keys answer a different question than the seat constraint.** The constraint
 already stops a retried request from booking twice, but the retry would fail with
@@ -314,6 +340,5 @@ the test suites, not by assuming the generated code was correct.
 ## Possible next steps
 
 - Organizer dashboard with authentication (sales per event, booking list, check-in)
-- Temporary seat holds during checkout, with expiry
 - Payment integration (Stripe) with idempotent webhooks
 - Email confirmation with a signed management link
