@@ -146,6 +146,95 @@ describe("createBooking", () => {
   });
 });
 
+describe("createBooking with an idempotency key", () => {
+  async function setup() {
+    const organization = await createOrganization(db);
+    const { event, seats } = await createEventWithSeats(db, organization.id);
+    const command = { ...customer, organizationId: organization.id, eventId: event.id, seatIds: [seats[0].id] };
+    return { organization, event, seats, command };
+  }
+
+  it("returns the original booking when a request is retried, instead of SEATS_TAKEN", async () => {
+    const { command } = await setup();
+
+    const first = await createBooking(db, { ...command, idempotencyKey: "retry-1" });
+    const retry = await createBooking(db, { ...command, idempotencyKey: "retry-1" });
+    const withoutKey = await createBooking(db, command);
+
+    expect(first).toMatchObject({ ok: true, replayed: false });
+    expect(retry).toEqual({ ...first, replayed: true });
+    // The same retry without a key looks like someone else took the seat.
+    expect(withoutKey).toMatchObject({ ok: false, code: "SEATS_TAKEN" });
+    expect(await db.booking.count()).toBe(1);
+  });
+
+  it("treats the seats as a set, so a different order is the same request", async () => {
+    const { command, seats } = await setup();
+
+    const first = await createBooking(db, { ...command, seatIds: [seats[0].id, seats[1].id], idempotencyKey: "k" });
+    const retry = await createBooking(db, { ...command, seatIds: [seats[1].id, seats[0].id], idempotencyKey: "k" });
+
+    expect(retry).toEqual({ ...first, replayed: true });
+  });
+
+  it("rejects the same key for a different request", async () => {
+    const { command, seats } = await setup();
+
+    await createBooking(db, { ...command, idempotencyKey: "k" });
+    const otherSeats = await createBooking(db, { ...command, seatIds: [seats[1].id], idempotencyKey: "k" });
+    const otherCustomer = await createBooking(db, { ...command, customerName: "Ken Sato", idempotencyKey: "k" });
+
+    expect(otherSeats).toEqual({ ok: false, code: "IDEMPOTENCY_KEY_REUSED" });
+    expect(otherCustomer).toEqual({ ok: false, code: "IDEMPOTENCY_KEY_REUSED" });
+    expect(await db.booking.count()).toBe(1);
+  });
+
+  it("books once when the same request is sent several times at the same moment", async () => {
+    const { command } = await setup();
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => createBooking(db, { ...command, idempotencyKey: "double-click" })),
+    );
+
+    // Every caller gets the same booking; exactly one of them created it.
+    const references = new Set(results.map((result) => (result.ok ? result.reference : result.code)));
+    expect(references.size).toBe(1);
+    expect(results.filter((result) => result.ok && !result.replayed)).toHaveLength(1);
+    expect(await db.booking.count()).toBe(1);
+    expect(await db.idempotencyKey.count()).toBe(1);
+  });
+
+  it("does not store a key for a failed request, so it can be retried as is", async () => {
+    const { command, seats } = await setup();
+    await createBooking(db, { ...command, seatIds: [seats[1].id] });
+
+    const failed = await createBooking(db, { ...command, seatIds: [seats[1].id], idempotencyKey: "k" });
+    const retried = await createBooking(db, { ...command, idempotencyKey: "k" });
+
+    expect(failed).toMatchObject({ ok: false, code: "SEATS_TAKEN" });
+    expect(retried).toMatchObject({ ok: true, replayed: false });
+  });
+
+  it("still returns the booking after the event has started", async () => {
+    const { command, event } = await setup();
+    const first = await createBooking(db, { ...command, idempotencyKey: "k" });
+    await db.event.update({ where: { id: event.id }, data: { startsAt: new Date(Date.now() - 60_000) } });
+
+    expect(await createBooking(db, { ...command, idempotencyKey: "k" })).toEqual({ ...first, replayed: true });
+  });
+
+  it("scopes keys per tenant", async () => {
+    const a = await setup();
+    const b = await setup();
+
+    const inA = await createBooking(db, { ...a.command, idempotencyKey: "shared" });
+    const inB = await createBooking(db, { ...b.command, idempotencyKey: "shared" });
+
+    expect(inA).toMatchObject({ ok: true, replayed: false });
+    expect(inB).toMatchObject({ ok: true, replayed: false });
+  });
+});
+
 describe("cancelBooking", () => {
   async function bookOneSeat() {
     const organization = await createOrganization(db);

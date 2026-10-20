@@ -119,6 +119,8 @@ async function SeatSelection({ event, seatsLeft }: { event: PublicEvent; seatsLe
   return (
     <BookingForm
       action={bookSeatsAction.bind(null, event.organizationSlug, event.slug)}
+      // New on every render (this part is never prerendered), so each visit is a new booking.
+      idempotencyKey={crypto.randomUUID()}
       sections={seatMap}
       currency={event.currency}
       maxSeats={event.maxSeatsPerBooking}

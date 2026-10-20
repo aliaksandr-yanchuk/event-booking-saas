@@ -19,9 +19,10 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
-  venues   Venue[]
-  events   Event[]
-  bookings Booking[]
+  venues          Venue[]
+  events          Event[]
+  bookings        Booking[]
+  idempotencyKeys IdempotencyKey[]
 
   @@map("organizations")
 }
@@ -125,9 +126,10 @@ model Booking {
   createdAt      DateTime      @default(now())
   cancelledAt    DateTime?
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  seats        BookingSeat[]
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  seats          BookingSeat[]
+  idempotencyKey IdempotencyKey?
 
   @@index([organizationId, eventId])
   @@map("bookings")
@@ -146,4 +148,25 @@ model BookingSeat {
 
   @@id([bookingId, seatId])
   @@map("booking_seats")
+}
+
+// A client-chosen key (the Idempotency-Key header, or a hidden field in the booking form)
+// that made a booking. A retry with the same key returns that booking instead of booking
+// again. The row is written in the same transaction as the booking, so a key exists if and
+// only if its booking does. Failed requests leave no key, so they can be retried as is.
+model IdempotencyKey {
+  organizationId String
+  key            String
+  // SHA-256 of the request (event, customer, seats): the same key with a different
+  // request is a client bug and is rejected instead of returning the old booking.
+  requestHash    String
+  bookingId      String   @unique
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  booking      Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // Keys are scoped per tenant, like everything else.
+  @@id([organizationId, key])
+  @@map("idempotency_keys")
 }

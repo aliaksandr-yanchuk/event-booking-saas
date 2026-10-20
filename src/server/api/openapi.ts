@@ -22,6 +22,16 @@ const pathParam = (name: string, example: string, pattern?: string) => ({
 const org = pathParam("org", "harbor-hall");
 const event = pathParam("event", "midnight-jazz-session");
 const reference = pathParam("reference", "7KQM-4XPA", "^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$");
+const idempotencyKey = {
+  name: "Idempotency-Key",
+  in: "header",
+  required: false,
+  description:
+    "Makes the request safe to retry. A retry with the same key and body returns the original " +
+    "booking (with Idempotent-Replayed: true) instead of booking again. Use a new UUID per booking.",
+  schema: { type: "string", minLength: 1, maxLength: 255 },
+  example: "8e03978e-40d5-43e8-bc93-6894a57f9324",
+};
 
 export function buildOpenApiDocument() {
   return {
@@ -60,19 +70,28 @@ export function buildOpenApiDocument() {
         post: {
           operationId: "createBooking",
           summary: "Book seats",
-          parameters: [org, event],
+          parameters: [org, event, idempotencyKey],
           requestBody: { required: true, ...json("CreateBookingRequest") },
           responses: {
             201: {
               description: "Booking confirmed",
-              headers: { Location: { description: "API URL of the new booking", schema: { type: "string" } } },
+              headers: {
+                Location: { description: "API URL of the new booking", schema: { type: "string" } },
+                "Idempotent-Replayed": {
+                  description: "Present (true) when this is the stored result of an earlier request with the same key",
+                  schema: { type: "string", enum: ["true"] },
+                },
+              },
               ...json("BookingCreatedResponse"),
             },
-            400: problemResponse("Invalid body (VALIDATION_FAILED, INVALID_JSON)"),
+            400: problemResponse("Invalid body or Idempotency-Key (VALIDATION_FAILED, INVALID_JSON)"),
             404: problemResponse("Unknown organizer or event"),
             409: problemResponse("A seat is already booked (SEATS_TAKEN)"),
             415: problemResponse("Body is not application/json"),
-            422: problemResponse("A booking rule was broken (TOO_MANY_SEATS, INVALID_SEATS, EVENT_NOT_BOOKABLE)"),
+            422: problemResponse(
+              "A booking rule was broken (TOO_MANY_SEATS, INVALID_SEATS, EVENT_NOT_BOOKABLE), " +
+                "or the Idempotency-Key was used for a different request (IDEMPOTENCY_KEY_REUSED)",
+            ),
           },
         },
       },

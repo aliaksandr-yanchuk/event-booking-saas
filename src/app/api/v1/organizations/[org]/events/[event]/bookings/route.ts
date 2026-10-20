@@ -1,5 +1,6 @@
 import { revalidateTag } from "next/cache";
 import { parseBookingInput } from "@/lib/booking-input";
+import { parseIdempotencyKey } from "@/lib/idempotency-key";
 import { problem, readJson } from "@/server/api/problem";
 import { resolveEvent } from "@/server/api/resolve";
 import { BookingCreatedResponse, jsonResponse } from "@/server/api/schemas";
@@ -10,13 +11,21 @@ import { db } from "@/server/db";
 /**
  * POST /api/v1/organizations/{org}/events/{event}/bookings
  * Body: { "customerName": string, "customerEmail": string, "seatIds": string[] }
+ * Optional header: Idempotency-Key, so a client can safely retry after a timeout.
  *
  * 201 with the booking and a Location header, or a problem response:
- * 400 invalid body, 404 unknown organizer/event, 409 seats already booked,
- * 415 not JSON, 422 the request is valid JSON but breaks a booking rule.
+ * 400 invalid body or key, 404 unknown organizer/event, 409 seats already booked,
+ * 415 not JSON, 422 the request is valid JSON but breaks a booking rule
+ * (or reuses an idempotency key for a different request).
+ * A retry with the same key gets the original 201 again, marked Idempotent-Replayed.
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/v1/organizations/[org]/events/[event]/bookings">) {
   const { org, event: eventSlug } = await ctx.params;
+
+  const idempotencyKey = parseIdempotencyKey(request.headers.get("idempotency-key"));
+  if (!idempotencyKey.ok) {
+    return problem(400, "VALIDATION_FAILED", undefined, { errors: { "Idempotency-Key": idempotencyKey.message } });
+  }
 
   const json = await readJson(request);
   if (!json.ok) {
@@ -39,7 +48,12 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/organiza
   }
   const { organization, event } = resolved;
 
-  const result = await createBooking(db, { ...input.data, organizationId: organization.id, eventId: event.id });
+  const result = await createBooking(db, {
+    ...input.data,
+    organizationId: organization.id,
+    eventId: event.id,
+    idempotencyKey: idempotencyKey.key,
+  });
 
   if (!result.ok) {
     switch (result.code) {
@@ -56,6 +70,12 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/organiza
         return problem(422, "INVALID_SEATS");
       case "EVENT_NOT_BOOKABLE":
         return problem(422, "EVENT_NOT_BOOKABLE", "The event is cancelled or has already started.");
+      case "IDEMPOTENCY_KEY_REUSED":
+        return problem(
+          422,
+          "IDEMPOTENCY_KEY_REUSED",
+          "Send a new key for a new booking; reuse a key only to retry the exact same request.",
+        );
     }
   }
 
@@ -75,6 +95,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/organiza
         links: { self: location, page: `/${organization.slug}/bookings/${result.reference}` },
       },
     },
-    { status: 201, headers: { Location: location } },
+    {
+      status: 201,
+      // Same status and body as the original response, so a retrying client needs no special case.
+      headers: { Location: location, ...(result.replayed && { "Idempotent-Replayed": "true" }) },
+    },
   );
 }

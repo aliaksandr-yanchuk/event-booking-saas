@@ -22,6 +22,7 @@ const TITLES: Record<ProblemCode, string> = {
   EVENT_NOT_BOOKABLE: "This event cannot be booked",
   ALREADY_CANCELLED: "The booking is already cancelled",
   EVENT_STARTED: "The event has already started",
+  IDEMPOTENCY_KEY_REUSED: "This idempotency key was used for a different request",
 };
 
 export function problem(status: number, code: ProblemCode, detail?: string, extras: ProblemExtras = {}): Response {

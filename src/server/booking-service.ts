@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
 import { generateBookingReference } from "@/lib/booking-reference";
 import type { BookingInput } from "@/lib/booking-input";
@@ -8,10 +9,15 @@ import type { Db } from "@/server/db";
 export type CreateBookingCommand = BookingInput & {
   organizationId: string;
   eventId: string;
+  // Client-chosen key that makes retries safe: see IdempotencyKey in schema.prisma.
+  idempotencyKey?: string;
 };
 
 export type CreateBookingResult =
-  | { ok: true; reference: string; totalMinor: number }
+  // replayed: the key was already used for this exact request, and this is that booking.
+  | { ok: true; reference: string; totalMinor: number; replayed: boolean }
+  // The key was already used for a different request (other seats, customer or event).
+  | { ok: false; code: "IDEMPOTENCY_KEY_REUSED" }
   | { ok: false; code: "EVENT_NOT_BOOKABLE" }
   | { ok: false; code: "TOO_MANY_SEATS"; limit: number }
   | { ok: false; code: "INVALID_SEATS" }
@@ -24,6 +30,10 @@ export type CreateBookingResult =
  * Correctness under concurrency does not depend on the "is it free?" check:
  * booking_seats.seat_id is UNIQUE, so if two transactions pass the check at the
  * same moment, PostgreSQL rejects the second INSERT and its transaction rolls back.
+ *
+ * With an idempotency key, a retry of a request that already succeeded (say, after a
+ * timeout) returns the original booking. Without the key, the same retry would fail
+ * with SEATS_TAKEN: the customer's own first attempt holds the seats.
  */
 export async function createBooking(
   db: Db,
@@ -32,6 +42,15 @@ export async function createBooking(
 ): Promise<CreateBookingResult> {
   const now = options.now ?? new Date();
   const generateReference = options.generateReference ?? generateBookingReference;
+  const idempotency = command.idempotencyKey
+    ? { organizationId: command.organizationId, key: command.idempotencyKey, requestHash: hashRequest(command) }
+    : undefined;
+
+  // Checked first: a retry must return the booking even if the event has started since.
+  if (idempotency) {
+    const previous = await findIdempotentBooking(db, idempotency);
+    if (previous) return previous;
+  }
 
   const event = await db.event.findFirst({
     where: { id: command.eventId, organizationId: command.organizationId },
@@ -86,9 +105,18 @@ export async function createBooking(
       await tx.bookingSeat.createMany({
         data: seats.map((seat) => ({ bookingId: booking.id, seatId: seat.id })),
       });
+      if (idempotency) {
+        await tx.idempotencyKey.create({ data: { ...idempotency, bookingId: booking.id } });
+      }
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
+      // Two requests with the same key raced, and the other one won. Depending on which
+      // INSERT failed first, the error is about the seats or about the key, so check the key.
+      if (idempotency) {
+        const previous = await findIdempotentBooking(db, idempotency);
+        if (previous) return previous;
+      }
       // Lost the race: find out which of the requested seats are now held.
       const taken = await db.bookingSeat.findMany({
         where: { seatId: { in: command.seatIds } },
@@ -99,7 +127,32 @@ export async function createBooking(
     throw error;
   }
 
-  return { ok: true, reference, totalMinor };
+  return { ok: true, reference, totalMinor, replayed: false };
+}
+
+/** The booking an earlier request with the same key made, or null if the key is new. */
+async function findIdempotentBooking(
+  db: Db,
+  { organizationId, key, requestHash }: { organizationId: string; key: string; requestHash: string },
+): Promise<CreateBookingResult | null> {
+  const previous = await db.idempotencyKey.findUnique({
+    where: { organizationId_key: { organizationId, key } },
+    select: { requestHash: true, booking: { select: { reference: true, totalMinor: true } } },
+  });
+  if (!previous) return null;
+  if (previous.requestHash !== requestHash) return { ok: false, code: "IDEMPOTENCY_KEY_REUSED" };
+  return { ok: true, reference: previous.booking.reference, totalMinor: previous.booking.totalMinor, replayed: true };
+}
+
+/** Fingerprint of what is being booked. Seat order does not change the request, so it is sorted. */
+function hashRequest(command: CreateBookingCommand): string {
+  const canonical = JSON.stringify([
+    command.eventId,
+    command.customerName,
+    command.customerEmail,
+    [...command.seatIds].sort(),
+  ]);
+  return createHash("sha256").update(canonical).digest("hex");
 }
 
 export type CancelBookingResult =

@@ -14,11 +14,12 @@ type BookingFormProps = {
   sections: SeatMap;
   currency: string;
   maxSeats: number;
+  idempotencyKey: string;
 };
 
 const initialState: BookingFormState = { status: "idle" };
 
-export function BookingForm({ action, sections, currency, maxSeats }: BookingFormProps) {
+export function BookingForm({ action, sections, currency, maxSeats, idempotencyKey }: BookingFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
@@ -54,6 +55,7 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
     // Without the reset guard, a failed submit would uncheck the seat checkboxes
     // while `selected` still holds them, and the next submit would send no seats.
     <form action={formAction} onSubmit={submitWithoutReset(formAction)} className="flex flex-col gap-8" noValidate>
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <fieldset
         // Fieldsets default to min-inline-size: min-content, so without min-w-0 a wide
         // seat row stretches the whole page on phones instead of scrolling inside its box.

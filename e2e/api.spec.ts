@@ -111,6 +111,40 @@ test("only one of several simultaneous requests gets the same seat", async ({ re
   expect(conflict).toMatchObject({ status: 409, code: "SEATS_TAKEN", takenSeatIds: [seat.id] });
 });
 
+test("a retry with the same Idempotency-Key returns the original booking", async ({ request }) => {
+  const seat = await findSeat(request, "A", "H", 1);
+  const key = crypto.randomUUID();
+  const send = (seatIds: string[], idempotencyKey = `"${key}"`) =>
+    request.post(`${EVENT}/bookings`, {
+      headers: { "Idempotency-Key": idempotencyKey },
+      data: { customerName: "API Client", customerEmail: "api@example.com", seatIds },
+    });
+
+  const first = await send([seat.id]);
+  expect(first.status()).toBe(201);
+  expect(first.headers()["idempotent-replayed"]).toBeUndefined();
+
+  // Same key, quoted (IETF draft) or not (Stripe style): same response, marked as a replay.
+  const retry = await send([seat.id], key);
+  expect(retry.status()).toBe(201);
+  expect(retry.headers()["idempotent-replayed"]).toBe("true");
+  expect(retry.headers()["location"]).toBe(first.headers()["location"]);
+  expect(await parse(retry, BookingCreatedResponse)).toEqual(await parse(first, BookingCreatedResponse));
+
+  const otherSeat = await findSeat(request, "A", "H", 2);
+  const misuse = await send([otherSeat.id]);
+  expect(misuse.status()).toBe(422);
+  expect((await parse(misuse, Problem)).code).toBe("IDEMPOTENCY_KEY_REUSED");
+  expect((await findSeat(request, "A", "H", 2)).available).toBe(true);
+
+  const invalid = await send([otherSeat.id], "");
+  expect(invalid.status()).toBe(400);
+  expect(await parse(invalid, Problem)).toMatchObject({
+    code: "VALIDATION_FAILED",
+    errors: { "Idempotency-Key": expect.any(String) },
+  });
+});
+
 test("rejects invalid bodies with field errors (RFC 9457)", async ({ request }) => {
   const response = await request.post(`${EVENT}/bookings`, {
     data: { customerName: "", customerEmail: "not-an-email", seatIds: [] },

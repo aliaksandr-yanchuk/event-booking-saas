@@ -122,6 +122,19 @@ Status codes follow the usual split: **400** the body is not valid (with per-fie
 Cancellation is `POST …/cancel` rather than `DELETE`, because it needs a body (the email
 as a second factor) and the booking is kept with status `cancelled`, not deleted.
 
+**Safe retries.** `POST …/bookings` accepts an
+[`Idempotency-Key`](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
+header. If the response to a booking is lost (a timeout, a dropped mobile connection),
+the client resends the same request with the same key and gets the original `201` back,
+marked `Idempotent-Replayed: true`, instead of a new booking or a confusing `409`:
+
+```bash
+curl -s -X POST …/bookings -H 'Idempotency-Key: "8e03978e-40d5-43e8-bc93-6894a57f9324"' …
+```
+
+Reusing a key for a different request (other seats or customer) is a client bug and gets
+`422 IDEMPOTENCY_KEY_REUSED`.
+
 ## Design decisions
 
 **Double booking is impossible by construction.** `booking_seats.seat_id` has a UNIQUE
@@ -130,6 +143,18 @@ does not depend on that check: if two requests pass it at the same time, Postgre
 rejects the second insert and its whole transaction rolls back. The integration test
 [`booking-service.int.test.ts`](src/server/booking-service.int.test.ts) fires 10
 concurrent bookings for one seat and asserts that exactly one wins, with no orphaned rows.
+
+**Idempotency keys answer a different question than the seat constraint.** The constraint
+already stops a retried request from booking twice, but the retry would fail with
+`SEATS_TAKEN`: from the server's point of view, the customer's own first attempt holds
+the seats. The key lets the server recognize the retry and return the first booking.
+The key is stored in the same transaction as the booking (`idempotency_keys`, primary key
+per tenant and key, plus a SHA-256 of the request), so there is no "in progress" state to
+clean up after a crash: either the booking and its key exist, or neither does. Failed
+requests store nothing and can be retried as they are. Two requests with the same key at
+the same moment are handled by the same constraints as the seat race: the loser looks up
+the winner's booking and returns it. The booking form uses the same mechanism with a
+hidden key per page view, so a double submit without JavaScript lands on one booking.
 
 **Tenant isolation lives in the data layer, not in the pages.** Event slugs are unique
 per organizer (`@@unique([organizationId, slug])`), seat IDs are always looked up within

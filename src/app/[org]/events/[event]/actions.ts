@@ -3,6 +3,7 @@
 import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseBookingForm, type BookingFieldErrors } from "@/lib/booking-input";
+import { parseIdempotencyKey } from "@/lib/idempotency-key";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
@@ -31,6 +32,13 @@ export async function bookSeatsAction(
     customerEmail: String(formData.get("customerEmail") ?? ""),
   };
 
+  // One key per rendered form (see page.tsx): a double submit, or a resubmit after the
+  // response was lost, lands on the same booking instead of failing with "seats taken".
+  const idempotencyKey = parseIdempotencyKey(formData.get("idempotencyKey")?.toString());
+  if (!idempotencyKey.ok) {
+    return { status: "error", message: "This form is out of date. Reload the page.", values };
+  }
+
   const parsed = parseBookingForm(formData);
   if (!parsed.success) {
     return {
@@ -51,6 +59,7 @@ export async function bookSeatsAction(
     ...parsed.data,
     organizationId: organization.id,
     eventId: event.id,
+    idempotencyKey: idempotencyKey.key,
   });
 
   if (!result.ok) {
@@ -77,6 +86,13 @@ export async function bookSeatsAction(
         return { status: "error", message: "Some seats could not be found. Reload the page.", values };
       case "EVENT_NOT_BOOKABLE":
         return { status: "error", message: "Booking is closed for this event.", values };
+      case "IDEMPOTENCY_KEY_REUSED":
+        // The form already made a booking (for example, the visitor went back and changed seats).
+        return {
+          status: "error",
+          message: "This form was already used for a booking. Reload the page to make another one.",
+          values,
+        };
     }
   }
 

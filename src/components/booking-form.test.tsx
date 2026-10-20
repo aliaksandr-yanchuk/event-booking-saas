@@ -24,7 +24,9 @@ const sections: SeatMap = [
 ];
 
 function renderForm(action = jest.fn(async (): Promise<BookingFormState> => ({ status: "idle" })), maxSeats = 6) {
-  render(<BookingForm action={action} sections={sections} currency="JPY" maxSeats={maxSeats} />);
+  render(
+    <BookingForm action={action} sections={sections} currency="JPY" maxSeats={maxSeats} idempotencyKey="form-key" />,
+  );
   return { action, user: userEvent.setup() };
 }
 
@@ -110,6 +112,20 @@ describe("BookingForm", () => {
     expect(seat("Floor, row A, seat 1")).toBeChecked();
     const submitted = action.mock.calls[0] as unknown as [BookingFormState, FormData];
     expect(submitted[1].getAll("seatIds")).toEqual(["f-a1"]);
+  });
+
+  it("submits the idempotency key of this form, so a resubmit cannot book twice", async () => {
+    const action = jest.fn(async (): Promise<BookingFormState> => ({ status: "error", message: "Try again." }));
+    const { user } = renderForm(action);
+
+    await user.click(seat("Floor, row A, seat 1"));
+    await act(() => user.click(screen.getByRole("button", { name: /Book 1 seat/ })));
+    await act(() => user.click(screen.getByRole("button", { name: /Book 1 seat/ })));
+
+    const keys = action.mock.calls.map((call) =>
+      (call as unknown as [BookingFormState, FormData])[1].get("idempotencyKey"),
+    );
+    expect(keys).toEqual(["form-key", "form-key"]);
   });
 
   it("connects field errors to their inputs", async () => {
