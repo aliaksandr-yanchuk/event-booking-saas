@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { BookingFormState } from "@/app/[org]/events/[event]/actions";
 import type { SeatMap } from "@/server/repositories/events";
 import { BookingForm } from "./booking-form";
+import { POLL_INTERVAL_MS } from "./use-live-taken-seats";
 
 const sections: SeatMap = [
   {
@@ -23,11 +24,22 @@ const sections: SeatMap = [
   },
 ];
 
-function renderForm(action = jest.fn(async (): Promise<BookingFormState> => ({ status: "idle" })), maxSeats = 6) {
+function renderForm(
+  action = jest.fn(async (): Promise<BookingFormState> => ({ status: "idle" })),
+  maxSeats = 6,
+  userOptions: Parameters<typeof userEvent.setup>[0] = {},
+) {
   render(
-    <BookingForm action={action} sections={sections} currency="JPY" maxSeats={maxSeats} idempotencyKey="form-key" />,
+    <BookingForm
+      action={action}
+      sections={sections}
+      currency="JPY"
+      maxSeats={maxSeats}
+      idempotencyKey="form-key"
+      availabilityUrl="/api/v1/organizations/harbor-hall/events/test"
+    />,
   );
-  return { action, user: userEvent.setup() };
+  return { action, user: userEvent.setup(userOptions) };
 }
 
 const seat = (name: string) => screen.getByRole("checkbox", { name });
@@ -144,5 +156,97 @@ describe("BookingForm", () => {
     expect(email).toHaveAccessibleDescription(
       "Needed to manage or cancel your booking. Enter a valid email address, like name@example.com.",
     );
+  });
+});
+
+describe("BookingForm live seat map", () => {
+  // The API answer for the seat map above, with the given seats taken.
+  function apiResponse(takenIds: string[]) {
+    const body = {
+      data: {
+        sections: sections.map((section) => ({
+          name: section.name,
+          priceMinor: section.priceMinor,
+          seats: section.seats.map(({ id, row, number }) => ({ id, row, number, available: !takenIds.includes(id) })),
+        })),
+      },
+    };
+    return { ok: true, json: async () => body } as Response;
+  }
+
+  let fetchMock: jest.Mock;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    fetchMock = jest.fn();
+    global.fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const nextPoll = () => act(() => jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS));
+  // user-event waits between steps with setTimeout, which is fake in these tests.
+  const withFakeTimers = { advanceTimers: (ms: number) => jest.advanceTimersByTimeAsync(ms) };
+
+  it("removes a selected seat that someone else just booked, and says so", async () => {
+    const { user } = renderForm(undefined, 6, withFakeTimers);
+    await user.click(seat("Floor, row A, seat 1"));
+    await user.click(seat("Floor, row A, seat 3"));
+
+    fetchMock.mockResolvedValue(apiResponse(["f-a2", "f-a1"]));
+    await nextPoll();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/organizations/harbor-hall/events/test", expect.anything());
+    expect(seat("Floor, row A, seat 1, taken")).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Floor · Row A · Seat 1 was just booked by someone else and was removed from your selection.",
+    );
+    expect(screen.getByTestId("booking-total")).toHaveTextContent("¥8,000");
+  });
+
+  it("frees a seat that was released by a cancellation", async () => {
+    renderForm();
+    expect(seat("Floor, row A, seat 2, taken")).toBeDisabled();
+
+    fetchMock.mockResolvedValue(apiResponse([]));
+    await nextPoll();
+
+    expect(seat("Floor, row A, seat 2")).toBeEnabled();
+  });
+
+  it("keeps the last known map when a poll fails, and tries again", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    renderForm();
+
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await nextPoll();
+    expect(seat("Floor, row A, seat 2, taken")).toBeDisabled();
+
+    fetchMock.mockResolvedValue(apiResponse(["f-a3"]));
+    await nextPoll();
+    expect(seat("Floor, row A, seat 3, taken")).toBeDisabled();
+    warn.mockRestore();
+  });
+
+  it("stops polling while the tab is hidden and catches up when it is visible again", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    jest.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+    fetchMock.mockResolvedValue(apiResponse(["f-a2"]));
+    renderForm();
+
+    visibility = "hidden";
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await act(() => jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    visibility = "visible";
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

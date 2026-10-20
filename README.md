@@ -88,13 +88,13 @@ used in three places, so the documentation cannot drift from the code:
 3. **Contract tests:** the API tests parse every real response with its schema. The
    response schemas are strict, so a missing, renamed or extra field fails the test.
 
-| Method | Path                                               | Success                            | Errors                  |
-| ------ | -------------------------------------------------- | ---------------------------------- | ----------------------- |
-| GET    | `/organizations/{org}/events`                      | 200, cacheable for 60 s            | 404                     |
-| GET    | `/organizations/{org}/events/{event}`              | 200 with live seat map, `no-store` | 404                     |
-| POST   | `/organizations/{org}/events/{event}/bookings`     | 201 + `Location`                   | 400, 404, 409, 415, 422 |
-| GET    | `/organizations/{org}/bookings/{reference}`        | 200 (no email in the response)     | 404                     |
-| POST   | `/organizations/{org}/bookings/{reference}/cancel` | 200                                | 400, 404, 409, 422      |
+| Method | Path                                               | Success                                                          | Errors                  |
+| ------ | -------------------------------------------------- | ---------------------------------------------------------------- | ----------------------- |
+| GET    | `/organizations/{org}/events`                      | 200, cacheable for 60 s                                          | 404                     |
+| GET    | `/organizations/{org}/events/{event}`              | 200 with live seat map, `no-cache` + `ETag` (304 when unchanged) | 404                     |
+| POST   | `/organizations/{org}/events/{event}/bookings`     | 201 + `Location`                                                 | 400, 404, 409, 415, 422 |
+| GET    | `/organizations/{org}/bookings/{reference}`        | 200 (no email in the response)                                   | 404                     |
+| POST   | `/organizations/{org}/bookings/{reference}/cancel` | 200                                                              | 400, 404, 409, 422      |
 
 ```bash
 curl -s -X POST http://localhost:3000/api/v1/organizations/harbor-hall/events/midnight-jazz-session/bookings \
@@ -171,6 +171,16 @@ another tenant's event by editing the request.
 **Forms work without JavaScript.** Seats are real `<input type="checkbox">` elements styled
 as seat tiles, so keyboard use, screen readers and plain HTML form posts work out of the
 box. Errors are connected to their fields with `aria-describedby` and `aria-invalid`.
+
+**The seat map stays live, cheaply.** While the page is open, it polls the public event
+API every 5 seconds ([`use-live-taken-seats.ts`](src/components/use-live-taken-seats.ts)),
+so seats booked by others turn grey and cancelled ones free up without a reload. If a
+seat the visitor had selected is taken, it leaves the selection with a notice (announced
+to screen readers) instead of failing at submit. Polling rather than WebSockets or SSE,
+because on serverless hosting a stream keeps a function running per visitor. The API
+sends an `ETag` with `Cache-Control: no-cache`, so the browser revalidates every poll
+and an unchanged seat map costs an empty `304`. Polling pauses while the tab is hidden.
+The page uses the same public API as any other client.
 
 **Shared links get a preview image.** [`opengraph-image.tsx`](src/app/[org]/events/[event]/opengraph-image.tsx)
 draws a 1200×630 card per event with `ImageResponse` (JSX rendered to PNG), and Next.js

@@ -64,9 +64,26 @@ export function buildOpenApiDocument() {
         get: {
           operationId: "getEvent",
           summary: "Get an event with live seat availability",
-          parameters: [org, event],
+          parameters: [
+            org,
+            event,
+            {
+              name: "If-None-Match",
+              in: "header",
+              required: false,
+              description: "ETag of a copy the client already has; unchanged data then answers 304",
+              schema: { type: "string" },
+            },
+          ],
           responses: {
-            200: { description: "Event details and seat map", ...json("EventDetailResponse") },
+            200: {
+              description: "Event details and seat map",
+              headers: {
+                ETag: { description: "Changes whenever the event or any seat changes", schema: { type: "string" } },
+              },
+              ...json("EventDetailResponse"),
+            },
+            304: { description: "Not modified: the client's copy (If-None-Match) is current" },
             404: problemResponse("Unknown organizer or event"),
           },
         },

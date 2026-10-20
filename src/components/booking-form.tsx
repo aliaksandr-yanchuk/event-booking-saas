@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import type { BookingFormState } from "@/app/[org]/events/[event]/actions";
 import { buttonClasses } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { useLiveTakenSeats } from "@/components/use-live-taken-seats";
 import { formatMoney } from "@/lib/money";
 import { groupSeatsByRow } from "@/lib/seats";
 import { submitWithoutReset } from "@/lib/submit-without-reset";
@@ -15,21 +16,51 @@ type BookingFormProps = {
   currency: string;
   maxSeats: number;
   idempotencyKey: string;
+  // Public API URL of this event, polled to keep the seat map current.
+  availabilityUrl: string;
 };
 
 const initialState: BookingFormState = { status: "idle" };
 
-export function BookingForm({ action, sections, currency, maxSeats, idempotencyKey }: BookingFormProps) {
+export function BookingForm({
+  action,
+  sections,
+  currency,
+  maxSeats,
+  idempotencyKey,
+  availabilityUrl,
+}: BookingFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [lostNotice, setLostNotice] = useState<string | null>(null);
+  const liveTaken = useLiveTakenSeats(availabilityUrl);
 
-  // Seats lost to another customer since the page loaded count as taken too.
+  // Once polled, the live map replaces the server-rendered one, so seats released by a
+  // cancellation become free again. Seats a failed submit reported as taken count too.
   const takenNow = new Set(state.takenSeatIds ?? []);
-  const isTaken = (seat: { id: string; taken: boolean }) => seat.taken || takenNow.has(seat.id);
+  const isTaken = (seat: { id: string; taken: boolean }) =>
+    (liveTaken ? liveTaken.has(seat.id) : seat.taken) || takenNow.has(seat.id);
 
   const seatsById = new Map(
     sections.flatMap((section) => section.seats.map((seat) => [seat.id, { ...seat, section }] as const)),
   );
+
+  // Someone else booked a seat this visitor had selected: drop it from the selection and
+  // say so, instead of letting the submit fail. Adjusting state during render (rather than
+  // in an effect) is React's pattern for reacting to new data without an extra paint.
+  const lost = liveTaken ? [...selected].filter((id) => liveTaken.has(id)) : [];
+  if (lost.length > 0) {
+    setSelected((current) => new Set([...current].filter((id) => !liveTaken!.has(id))));
+    const labels = lost.flatMap((id) => {
+      const seat = seatsById.get(id);
+      return seat ? [`${seat.section.name} · Row ${seat.row} · Seat ${seat.number}`] : [];
+    });
+    setLostNotice(
+      labels.length === 1
+        ? `${labels[0]} was just booked by someone else and was removed from your selection.`
+        : `These seats were just booked by someone else and were removed from your selection: ${labels.join(", ")}.`,
+    );
+  }
   const selectedSeats = [...selected].flatMap((id) => {
     const seat = seatsById.get(id);
     return seat && !isTaken(seat) ? [seat] : [];
@@ -38,6 +69,7 @@ export function BookingForm({ action, sections, currency, maxSeats, idempotencyK
   const limitReached = selectedSeats.length >= maxSeats;
 
   function toggle(seatId: string) {
+    setLostNotice(null);
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(seatId)) {
@@ -125,6 +157,10 @@ export function BookingForm({ action, sections, currency, maxSeats, idempotencyK
         <h3 id="summary-heading" className="font-medium">
           Your selection
         </h3>
+        {/* Always rendered, so screen readers announce the notice when it appears. */}
+        <p role="status" className="text-sm text-danger empty:hidden">
+          {lostNotice}
+        </p>
         {selectedSeats.length === 0 ? (
           <p className="text-sm text-muted">No seats selected yet.</p>
         ) : (

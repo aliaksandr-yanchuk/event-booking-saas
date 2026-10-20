@@ -116,3 +116,26 @@ test("draft events and other tenants' slugs are not found", async ({ page }) => 
   await page.goto("/kyoto-chamber/events/midnight-jazz-session");
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 });
+
+test("the seat map updates live when someone else books a selected seat", async ({ page, request }, testInfo) => {
+  const number = testInfo.project.name === "mobile" ? 2 : 1;
+  await page.goto("/harbor-hall/events/midnight-jazz-session");
+  await seat(page, "Balcony", "B", number).check({ force: true });
+  await expect(page.getByTestId("booking-total")).toHaveText("¥5,000");
+
+  // Another customer books the same seat through the API while the page stays open.
+  const seatId = await seat(page, "Balcony", "B", number).getAttribute("value");
+  const booked = await request.post("/api/v1/organizations/harbor-hall/events/midnight-jazz-session/bookings", {
+    data: { customerName: "Ren Mori", customerEmail: "ren@example.com", seatIds: [seatId] },
+  });
+  expect(booked.status()).toBe(201);
+
+  // Without a reload: the next poll (every 5 s) marks the seat taken and drops it.
+  await expect(page.getByRole("checkbox", { name: `Balcony, row B, seat ${number}, taken` })).toBeDisabled({
+    timeout: 10_000,
+  });
+  await expect(page.getByRole("status")).toHaveText(
+    `Balcony · Row B · Seat ${number} was just booked by someone else and was removed from your selection.`,
+  );
+  await expect(page.getByTestId("booking-total")).toHaveText("¥0");
+});

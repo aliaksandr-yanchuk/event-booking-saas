@@ -46,11 +46,18 @@ test("lists an organizer's upcoming events", async ({ request }) => {
   expect(body.data[0].priceRange).toEqual({ currency: "JPY", minMinor: 6000, maxMinor: 9000 });
 });
 
-test("returns event details with live availability, never cached", async ({ request }) => {
+test("returns event details with live availability, revalidated on every request", async ({ request }) => {
   const response = await request.get(EVENT);
 
   expect(response.status()).toBe(200);
-  expect(response.headers()["cache-control"]).toBe("no-store");
+  expect(response.headers()["cache-control"]).toBe("no-cache");
+
+  // Unchanged data: a conditional request gets an empty 304.
+  const etag = response.headers()["etag"];
+  const notModified = await request.get(EVENT, { headers: { "If-None-Match": etag } });
+  expect(notModified.status()).toBe(304);
+  expect(notModified.headers()["etag"]).toBe(etag);
+  expect(await notModified.body()).toHaveLength(0);
   const { data } = await parse(response, EventDetailResponse);
   expect(data).toMatchObject({ slug: "autumn-strings", status: "published", currency: "JPY", maxSeatsPerBooking: 6 });
   // Seeded booking: section S, row B, seats 6–9.
