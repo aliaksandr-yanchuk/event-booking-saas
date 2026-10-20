@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { localizePath } from "@/i18n/config";
 import type { PaymentProvider } from "@/server/payments/provider";
 
 /**
@@ -10,9 +11,10 @@ import type { PaymentProvider } from "@/server/payments/provider";
 export const demoPaymentProvider: PaymentProvider = {
   name: "demo",
 
-  async createCheckout() {
+  async createCheckout(request) {
     const sessionId = `demo_cs_${randomUUID()}`;
-    return { sessionId, url: `/checkout/demo/${sessionId}` };
+    // In the customer's language, like Stripe Checkout with its locale parameter.
+    return { sessionId, url: localizePath(request.locale, `/checkout/demo/${sessionId}`) };
   },
 
   // The demo page confirms the payment itself, so there is never a payment to find here.

@@ -72,6 +72,23 @@ test("a Japanese visitor books, and the booking, email and links stay Japanese",
   await expect(page.getByText("予約キャンセル済み")).toBeVisible();
 });
 
+test("a Japanese visitor pays on a Japanese checkout and gets a Japanese ticket", async ({ page }, testInfo) => {
+  const number = testInfo.project.name === "mobile" ? 2 : 1;
+  await page.goto("/ja/harbor-hall/events/indie-rock-night");
+  await page.getByRole("checkbox", { name: `Balcony B列 ${number}番`, exact: true }).check({ force: true });
+  await page.getByLabel("お名前").fill("鈴木 花");
+  await page.getByLabel("メールアドレス").fill("hana@example.com");
+  await page.getByRole("button", { name: "支払いへ進む · 1席 · ￥4,500" }).click();
+
+  await expect(page).toHaveURL(/\/ja\/checkout\/demo\/demo_cs_/);
+  await expect(page.getByText("デモ決済画面です。")).toBeVisible();
+  await page.getByRole("button", { name: "￥4,500 を支払う" }).click();
+
+  await expect(page).toHaveURL(/\/ja\/harbor-hall\/bookings\//);
+  await expect(page.getByText("予約確定")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "チケット" })).toBeVisible();
+});
+
 test("the dashboard and its login page are in Japanese under /ja", async ({ page }) => {
   await page.goto("/ja/dashboard");
   await expect(page).toHaveURL(/\/ja\/login\?next=%2Fja%2Fdashboard$/);
