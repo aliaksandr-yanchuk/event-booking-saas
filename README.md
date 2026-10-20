@@ -3,6 +3,8 @@
 [![CI](https://github.com/aliaksandr-yanchuk/event-booking-saas/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaksandr-yanchuk/event-booking-saas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+English | [日本語](README.ja.md)
+
 A reserved-seating booking service for live events, built as a portfolio project.
 Each organizer (tenant) gets its own event pages; visitors pick seats on a live seat map,
 the seats are held while they pay, and the payment confirms the booking. **Two people can
