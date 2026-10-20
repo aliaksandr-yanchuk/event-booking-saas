@@ -23,9 +23,7 @@ async function parse<S extends z.ZodType>(response: APIResponse, schema: S): Pro
 
 async function findSeat(request: APIRequestContext, section: string, row: string, number: number) {
   const { data } = await parse(await request.get(EVENT), EventDetailResponse);
-  const seat = data.sections
-    .find((s) => s.name === section)
-    ?.seats.find((s) => s.row === row && s.number === number);
+  const seat = data.sections.find((s) => s.name === section)?.seats.find((s) => s.row === row && s.number === number);
   if (!seat) throw new Error(`Seat ${section} ${row}${number} not found`);
   return seat;
 }
@@ -106,7 +104,10 @@ test("only one of several simultaneous requests gets the same seat", async ({ re
 
   const statuses = responses.map((response) => response.status()).sort();
   expect(statuses).toEqual([201, 409, 409, 409, 409]);
-  const conflict = await parse(responses.find((response) => response.status() === 409)!, Problem);
+  const conflict = await parse(
+    responses.find((response) => response.status() === 409)!,
+    Problem,
+  );
   expect(conflict).toMatchObject({ status: 409, code: "SEATS_TAKEN", takenSeatIds: [seat.id] });
 });
 

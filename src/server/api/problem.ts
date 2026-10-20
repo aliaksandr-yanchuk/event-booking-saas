@@ -33,7 +33,9 @@ export function problem(status: number, code: ProblemCode, detail?: string, extr
 }
 
 /** Reads a JSON body, rejecting other content types and malformed JSON with a problem response. */
-export async function readJson(request: Request): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
+export async function readJson(
+  request: Request,
+): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().startsWith("application/json")) {
     return { ok: false, response: problem(415, "UNSUPPORTED_MEDIA_TYPE") };

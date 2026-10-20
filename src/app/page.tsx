@@ -7,12 +7,10 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-10">
       <section className="flex flex-col gap-4">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Reserved seating for live events
-        </h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Reserved seating for live events</h1>
         <p className="max-w-2xl text-lg text-muted">
-          Each organizer gets its own event pages and seat maps. Pick your seats on a live map, and
-          the booking is confirmed at once. Two people can never get the same seat.
+          Each organizer gets its own event pages and seat maps. Pick your seats on a live map, and the booking is
+          confirmed at once. Two people can never get the same seat.
         </p>
       </section>
 
@@ -47,8 +45,7 @@ async function OrganizerList() {
           >
             <span className="text-lg font-medium">{organization.name}</span>
             <span className="text-sm text-muted">
-              {organization._count.events} published{" "}
-              {organization._count.events === 1 ? "event" : "events"}
+              {organization._count.events} published {organization._count.events === 1 ? "event" : "events"}
             </span>
           </Link>
         </li>

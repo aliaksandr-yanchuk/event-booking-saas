@@ -5,11 +5,7 @@ import { z } from "zod";
  * (the source of truth) and drives the error messages shown in the form.
  */
 export const bookingInputSchema = z.object({
-  customerName: z
-    .string()
-    .trim()
-    .min(1, "Enter your name.")
-    .max(80, "Use 80 characters or fewer."),
+  customerName: z.string().trim().min(1, "Enter your name.").max(80, "Use 80 characters or fewer."),
   customerEmail: z
     .string()
     // Trimmed before the email check, so " aiko@example.com " is accepted. The meta

@@ -41,65 +41,63 @@ export default async function Image({ params }: { params: Promise<{ org: string;
   // ImageResponse renders a subset of HTML/CSS (Satori): inline styles only, and
   // every element with more than one child needs display: flex.
   return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "64px 72px",
-          background: colors.background,
-          borderTop: `16px solid ${colors.accent}`,
-          color: colors.foreground,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 30, color: colors.muted }}>
-          <span>{event.organizationName}</span>
-          <span style={{ color: colors.accent }}>{SITE_NAME}</span>
-        </div>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "64px 72px",
+        background: colors.background,
+        borderTop: `16px solid ${colors.accent}`,
+        color: colors.foreground,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 30, color: colors.muted }}>
+        <span>{event.organizationName}</span>
+        <span style={{ color: colors.accent }}>{SITE_NAME}</span>
+      </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {cancelled && (
-            <span style={{ display: "flex", fontSize: 30, color: "#b42318", letterSpacing: 2 }}>CANCELLED</span>
-          )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {cancelled && (
+          <span style={{ display: "flex", fontSize: 30, color: "#b42318", letterSpacing: 2 }}>CANCELLED</span>
+        )}
+        <span
+          style={{
+            fontSize: event.title.length > 32 ? 64 : 80,
+            lineHeight: 1.1,
+            letterSpacing: -2,
+            // Long titles wrap to at most two lines instead of overflowing the card.
+            lineClamp: 2,
+          }}
+        >
+          {event.title}
+        </span>
+        <span style={{ fontSize: 34, color: colors.muted }}>
+          {formatEventDate(event.startsAt)} · {formatEventTime(event.startsAt)}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 30 }}>
+        <span style={{ color: colors.muted }}>
+          {event.venue.name}, {event.venue.city}
+        </span>
+        {prices.length > 0 && !cancelled && (
           <span
             style={{
-              fontSize: event.title.length > 32 ? 64 : 80,
-              lineHeight: 1.1,
-              letterSpacing: -2,
-              // Long titles wrap to at most two lines instead of overflowing the card.
-              lineClamp: 2,
+              display: "flex",
+              padding: "12px 28px",
+              borderRadius: 999,
+              background: colors.accentSoft,
+              color: colors.accent,
             }}
           >
-            {event.title}
+            from {formatMoney(Math.min(...prices), event.currency)}
           </span>
-          <span style={{ fontSize: 34, color: colors.muted }}>
-            {formatEventDate(event.startsAt)} · {formatEventTime(event.startsAt)}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 30 }}>
-          <span style={{ color: colors.muted }}>
-            {event.venue.name}, {event.venue.city}
-          </span>
-          {prices.length > 0 && !cancelled && (
-            <span
-              style={{
-                display: "flex",
-                padding: "12px 28px",
-                borderRadius: 999,
-                background: colors.accentSoft,
-                color: colors.accent,
-              }}
-            >
-              from {formatMoney(Math.min(...prices), event.currency)}
-            </span>
-          )}
-        </div>
+        )}
       </div>
-    ),
+    </div>,
     { ...size },
   );
 }

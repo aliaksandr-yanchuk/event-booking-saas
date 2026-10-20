@@ -44,7 +44,7 @@ async function BookingDetails({ params }: Pick<Props, "params">) {
   return (
     <div className="flex max-w-2xl flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <p className={`text-sm font-medium uppercase tracking-wide ${cancelled ? "text-danger" : "text-accent"}`}>
+        <p className={`text-sm font-medium tracking-wide uppercase ${cancelled ? "text-danger" : "text-accent"}`}>
           {cancelled ? "Booking cancelled" : "Booking confirmed"}
         </p>
         <h1 className="text-3xl font-semibold tracking-tight">{booking.event.title}</h1>
@@ -83,9 +83,7 @@ async function BookingDetails({ params }: Pick<Props, "params">) {
             Can&apos;t make it?
           </h2>
           <p className="text-sm text-muted">Cancel before the event starts and your seats go back on sale.</p>
-          <CancelBookingForm
-            action={cancelBookingAction.bind(null, organization.slug, booking.reference)}
-          />
+          <CancelBookingForm action={cancelBookingAction.bind(null, organization.slug, booking.reference)} />
         </section>
       )}
 

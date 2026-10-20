@@ -38,7 +38,7 @@ async function OrganizationEvents({ params }: Pick<PageProps<"/[org]">, "params"
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <p className="text-sm font-medium uppercase tracking-wide text-accent">Organizer</p>
+        <p className="text-sm font-medium tracking-wide text-accent uppercase">Organizer</p>
         <h1 className="text-3xl font-semibold tracking-tight">{organization.name}</h1>
       </header>
 
@@ -54,7 +54,10 @@ async function OrganizationEvents({ params }: Pick<PageProps<"/[org]">, "params"
                   <div className="flex flex-col gap-1">
                     <h2 className="text-lg font-medium">
                       {/* The link covers the whole card, while the heading stays the accessible name. */}
-                      <Link href={`/${organization.slug}/events/${event.slug}`} className="after:absolute after:inset-0">
+                      <Link
+                        href={`/${organization.slug}/events/${event.slug}`}
+                        className="after:absolute after:inset-0"
+                      >
                         {event.title}
                       </Link>
                     </h2>
@@ -67,9 +70,7 @@ async function OrganizationEvents({ params }: Pick<PageProps<"/[org]">, "params"
                     </p>
                   </div>
                   {Number.isFinite(lowestPrice) && (
-                    <p className="shrink-0 text-sm font-medium">
-                      from {formatMoney(lowestPrice, event.currency)}
-                    </p>
+                    <p className="shrink-0 text-sm font-medium">from {formatMoney(lowestPrice, event.currency)}</p>
                   )}
                 </article>
               </li>

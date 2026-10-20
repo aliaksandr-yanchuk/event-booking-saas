@@ -19,9 +19,7 @@ export function buildEventJsonLd(event: PublicEvent, url: string, seatsLeft: num
     startDate: event.startsAt.toISOString(),
     endDate: event.endsAt.toISOString(),
     eventStatus:
-      event.status === "CANCELLED"
-        ? "https://schema.org/EventCancelled"
-        : "https://schema.org/EventScheduled",
+      event.status === "CANCELLED" ? "https://schema.org/EventCancelled" : "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     url,
     location: {
@@ -45,8 +43,7 @@ export function buildEventJsonLd(event: PublicEvent, url: string, seatsLeft: num
         priceCurrency: event.currency,
         lowPrice: toMajor(Math.min(...prices)),
         highPrice: toMajor(Math.max(...prices)),
-        availability:
-          seatsLeft > 0 ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
+        availability: seatsLeft > 0 ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
       },
     }),
   };

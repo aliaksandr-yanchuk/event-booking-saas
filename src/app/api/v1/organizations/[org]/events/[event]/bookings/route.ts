@@ -15,10 +15,7 @@ import { db } from "@/server/db";
  * 400 invalid body, 404 unknown organizer/event, 409 seats already booked,
  * 415 not JSON, 422 the request is valid JSON but breaks a booking rule.
  */
-export async function POST(
-  request: Request,
-  ctx: RouteContext<"/api/v1/organizations/[org]/events/[event]/bookings">,
-) {
+export async function POST(request: Request, ctx: RouteContext<"/api/v1/organizations/[org]/events/[event]/bookings">) {
   const { org, event: eventSlug } = await ctx.params;
 
   const json = await readJson(request);

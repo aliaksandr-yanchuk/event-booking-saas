@@ -20,15 +20,15 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 
 ## What it shows
 
-| Area | In this project |
-| --- | --- |
-| Backend & data modeling | PostgreSQL schema with Prisma 7, tenant-scoped repositories, transactional booking service with typed results |
-| Concurrency | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests |
-| REST API | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
-| Frontend | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript |
-| SEO | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots |
-| Testing | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile |
-| Delivery | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI |
+| Area                    | In this project                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Backend & data modeling | PostgreSQL schema with Prisma 7, tenant-scoped repositories, transactional booking service with typed results                       |
+| Concurrency             | Double booking prevented by a database constraint, proven by a test that fires 10 simultaneous requests                             |
+| REST API                | Versioned JSON API with RFC 9457 error responses, correct status codes and an OpenAPI document generated from the validation schema |
+| Frontend                | Next.js 16 App Router with Cache Components, React 19 Server Actions, accessible forms that also work without JavaScript            |
+| SEO                     | Per-event metadata, canonical URLs, generated Open Graph images, schema.org `Event` JSON-LD, sitemap and robots                     |
+| Testing                 | Jest unit tests, Jest integration tests against a real database, Playwright E2E on desktop and mobile                               |
+| Delivery                | Multi-stage Docker image, migrations as a separate job, GitHub Actions CI                                                           |
 
 ## Tech stack
 
@@ -88,13 +88,13 @@ used in three places, so the documentation cannot drift from the code:
 3. **Contract tests:** the API tests parse every real response with its schema. The
    response schemas are strict, so a missing, renamed or extra field fails the test.
 
-| Method | Path | Success | Errors |
-| --- | --- | --- | --- |
-| GET | `/organizations/{org}/events` | 200, cacheable for 60 s | 404 |
-| GET | `/organizations/{org}/events/{event}` | 200 with live seat map, `no-store` | 404 |
-| POST | `/organizations/{org}/events/{event}/bookings` | 201 + `Location` | 400, 404, 409, 415, 422 |
-| GET | `/organizations/{org}/bookings/{reference}` | 200 (no email in the response) | 404 |
-| POST | `/organizations/{org}/bookings/{reference}/cancel` | 200 | 400, 404, 409, 422 |
+| Method | Path                                               | Success                            | Errors                  |
+| ------ | -------------------------------------------------- | ---------------------------------- | ----------------------- |
+| GET    | `/organizations/{org}/events`                      | 200, cacheable for 60 s            | 404                     |
+| GET    | `/organizations/{org}/events/{event}`              | 200 with live seat map, `no-store` | 404                     |
+| POST   | `/organizations/{org}/events/{event}/bookings`     | 201 + `Location`                   | 400, 404, 409, 415, 422 |
+| GET    | `/organizations/{org}/bookings/{reference}`        | 200 (no email in the response)     | 404                     |
+| POST   | `/organizations/{org}/bookings/{reference}/cancel` | 200                                | 400, 404, 409, 422      |
 
 ```bash
 curl -s -X POST http://localhost:3000/api/v1/organizations/harbor-hall/events/midnight-jazz-session/bookings \
@@ -159,12 +159,12 @@ needs the email as well as the reference.
 
 ## Testing
 
-| Suite | Command | What it covers |
-| --- | --- | --- |
-| Unit | `npm test` | Pricing, validation, booking references, JSON-LD, the booking form component |
-| Integration | `npm run test:integration` | Booking service against PostgreSQL: race condition, tenant isolation, cancellation, booking rules |
-| E2E | `npm run test:e2e` | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport |
-| API | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation |
+| Suite       | Command                             | What it covers                                                                                                  |
+| ----------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Unit        | `npm test`                          | Pricing, validation, booking references, JSON-LD, the booking form component                                    |
+| Integration | `npm run test:integration`          | Booking service against PostgreSQL: race condition, tenant isolation, cancellation, booking rules               |
+| E2E         | `npm run test:e2e`                  | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport                             |
+| API         | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation |
 
 CI runs all three on every pull request, plus lint, type check and a Docker build.
 In CI, the E2E tests run against the production build (`node .next/standalone/server.js`).

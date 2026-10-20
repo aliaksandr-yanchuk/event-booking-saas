@@ -27,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col font-sans">
         <a
           href="#main"
-          className="sr-only rounded bg-accent px-3 py-2 text-accent-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4"
+          className="sr-only rounded bg-accent px-3 py-2 text-accent-foreground focus:not-sr-only focus:absolute focus:top-4 focus:left-4"
         >
           Skip to content
         </a>

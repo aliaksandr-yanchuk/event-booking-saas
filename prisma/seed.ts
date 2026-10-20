@@ -52,7 +52,13 @@ async function createEvent(
 
   for (const [sortOrder, spec] of input.sections.entries()) {
     const section = await db.section.create({
-      data: { id: `${event.id}_${spec.name}`, eventId: event.id, name: spec.name, priceMinor: spec.priceMinor, sortOrder },
+      data: {
+        id: `${event.id}_${spec.name}`,
+        eventId: event.id,
+        name: spec.name,
+        priceMinor: spec.priceMinor,
+        sortOrder,
+      },
     });
     await db.seat.createMany({
       data: spec.rows.flatMap((row) =>
@@ -96,7 +102,9 @@ async function main() {
     "TRUNCATE booking_seats, bookings, seats, sections, events, venues, organizations CASCADE",
   );
 
-  const harbor = await db.organization.create({ data: { id: "org_harbor-hall", slug: "harbor-hall", name: "Harbor Hall Live" } });
+  const harbor = await db.organization.create({
+    data: { id: "org_harbor-hall", slug: "harbor-hall", name: "Harbor Hall Live" },
+  });
   const harborVenue = await db.venue.create({
     data: {
       id: "venue_harbor-hall",
@@ -155,7 +163,9 @@ async function main() {
     sections: [{ name: "Floor", priceMinor: 12000, rows: ROWS("A", 2), seatsPerRow: 8 }],
   });
 
-  const kyoto = await db.organization.create({ data: { id: "org_kyoto-chamber", slug: "kyoto-chamber", name: "Kyoto Chamber Orchestra" } });
+  const kyoto = await db.organization.create({
+    data: { id: "org_kyoto-chamber", slug: "kyoto-chamber", name: "Kyoto Chamber Orchestra" },
+  });
   const kyotoVenue = await db.venue.create({
     data: {
       id: "venue_okazaki",

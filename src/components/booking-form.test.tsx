@@ -72,14 +72,12 @@ describe("BookingForm", () => {
   });
 
   it("marks seats lost to another customer and keeps the entered values", async () => {
-    const action = jest.fn(
-      async (): Promise<BookingFormState> => ({
-        status: "error",
-        message: "Sorry, one of your seats was just booked by someone else. Choose another seat.",
-        takenSeatIds: ["f-a1"],
-        values: { customerName: "Aiko Tanaka", customerEmail: "aiko@example.com" },
-      }),
-    );
+    const action = jest.fn(async (): Promise<BookingFormState> => ({
+      status: "error",
+      message: "Sorry, one of your seats was just booked by someone else. Choose another seat.",
+      takenSeatIds: ["f-a1"],
+      values: { customerName: "Aiko Tanaka", customerEmail: "aiko@example.com" },
+    }));
     const { user } = renderForm(action);
 
     await user.click(seat("Floor, row A, seat 1"));
@@ -99,12 +97,10 @@ describe("BookingForm", () => {
   // Regression: React's automatic form reset unchecked the seat checkboxes after a
   // failed submit, while the summary still listed them as selected.
   it("keeps the seat checkboxes checked after a failed submit", async () => {
-    const action = jest.fn(
-      async (): Promise<BookingFormState> => ({
-        status: "error",
-        fieldErrors: { customerName: "Enter your name." },
-      }),
-    );
+    const action = jest.fn(async (): Promise<BookingFormState> => ({
+      status: "error",
+      fieldErrors: { customerName: "Enter your name." },
+    }));
     const { user } = renderForm(action);
 
     await user.click(seat("Floor, row A, seat 1"));
@@ -117,14 +113,12 @@ describe("BookingForm", () => {
   });
 
   it("connects field errors to their inputs", async () => {
-    const action = jest.fn(
-      async (): Promise<BookingFormState> => ({
-        status: "error",
-        message: "Check the highlighted fields.",
-        fieldErrors: { customerEmail: "Enter a valid email address, like name@example.com." },
-        values: { customerName: "Aiko", customerEmail: "aiko@" },
-      }),
-    );
+    const action = jest.fn(async (): Promise<BookingFormState> => ({
+      status: "error",
+      message: "Check the highlighted fields.",
+      fieldErrors: { customerEmail: "Enter a valid email address, like name@example.com." },
+      values: { customerName: "Aiko", customerEmail: "aiko@" },
+    }));
     const { user } = renderForm(action);
 
     await act(() => user.click(screen.getByRole("button", { name: "Book seats" })));

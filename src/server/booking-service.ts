@@ -104,8 +104,7 @@ export async function createBooking(
 
 export type CancelBookingResult =
   // eventId lets callers invalidate that event's cached availability.
-  | { ok: true; eventId: string }
-  | { ok: false; code: "NOT_FOUND" | "ALREADY_CANCELLED" | "EVENT_STARTED" };
+  { ok: true; eventId: string } | { ok: false; code: "NOT_FOUND" | "ALREADY_CANCELLED" | "EVENT_STARTED" };
 
 /**
  * Cancels a booking and releases its seats. The customer's email works as a

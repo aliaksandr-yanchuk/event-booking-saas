@@ -35,10 +35,7 @@ export function toEventSummary(event: EventListItem, organizationSlug: string): 
 }
 
 export function toEventDetail(event: PublicEvent, seatMap: SeatMap): z.output<typeof EventDetail> {
-  const seatsLeft = seatMap.reduce(
-    (count, section) => count + section.seats.filter((seat) => !seat.taken).length,
-    0,
-  );
+  const seatsLeft = seatMap.reduce((count, section) => count + section.seats.filter((seat) => !seat.taken).length, 0);
   return {
     slug: event.slug,
     title: event.title,

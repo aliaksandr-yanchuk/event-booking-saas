@@ -27,9 +27,7 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
   const isTaken = (seat: { id: string; taken: boolean }) => seat.taken || takenNow.has(seat.id);
 
   const seatsById = new Map(
-    sections.flatMap((section) =>
-      section.seats.map((seat) => [seat.id, { ...seat, section }] as const),
-    ),
+    sections.flatMap((section) => section.seats.map((seat) => [seat.id, { ...seat, section }] as const)),
   );
   const selectedSeats = [...selected].flatMap((id) => {
     const seat = seatsById.get(id);
@@ -97,7 +95,7 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
                           />
                           <span
                             aria-hidden="true"
-                            className="flex size-8 cursor-pointer select-none items-center justify-center rounded-md border border-border bg-seat-free text-xs transition-colors peer-checked:border-accent peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:cursor-not-allowed peer-disabled:border-transparent peer-disabled:bg-seat-taken peer-disabled:text-muted"
+                            className="flex size-8 cursor-pointer items-center justify-center rounded-md border border-border bg-seat-free text-xs transition-colors select-none peer-checked:border-accent peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:cursor-not-allowed peer-disabled:border-transparent peer-disabled:bg-seat-taken peer-disabled:text-muted"
                           >
                             {seat.number}
                           </span>
@@ -118,7 +116,10 @@ export function BookingForm({ action, sections, currency, maxSeats }: BookingFor
         )}
       </fieldset>
 
-      <section aria-labelledby="summary-heading" className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
+      <section
+        aria-labelledby="summary-heading"
+        className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5"
+      >
         <h3 id="summary-heading" className="font-medium">
           Your selection
         </h3>
