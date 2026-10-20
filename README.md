@@ -51,7 +51,8 @@ Organizer dashboard: [`/login`](https://event-booking-saas.vercel.app/login), de
 - **React 19.3**, **TypeScript 5.9**, **Tailwind CSS 4**
 - **PostgreSQL 17**, **Prisma 7** (with the `pg` driver adapter)
 - **Zod 4** for validation
-- **Jest 30** + Testing Library, **Playwright**
+- **Stripe** (Checkout, webhooks) and **Resend** (email), both optional
+- **Jest 30** + Testing Library, **Playwright**, **axe-core**, **stripe-mock**
 - **Docker**, **GitHub Actions**, Node.js 24 LTS
 
 ## Architecture
@@ -445,6 +446,7 @@ src/lib/                 pure functions (money, dates, validation, JSON-LD) + un
 src/server/              database client, repositories, booking and payment services, cached queries
 src/server/auth/         passwords, sessions, data access layer
 src/server/payments/     payment provider interface, Stripe and demo providers, webhook handling
+src/server/email/        outbox, templates, senders, signed manage links
 src/proxy.ts             redirects requests without a session cookie to the login page
 test/integration/        database test setup and factories
 e2e/                     Playwright tests

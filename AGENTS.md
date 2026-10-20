@@ -73,6 +73,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   parses the response with its schema. Breaking changes need a new version prefix.
 - Route handlers cannot call `updateTag`; invalidate with `revalidateTag(tag, { expire: 0 })`.
 
+### Documentation
+
+- `README.md` and `README.ja.md` have the same sections in the same order. A change to one
+  is made to the other in the same commit.
+
 ### Verification
 
 - Prove behavior with a test at the right level: pure logic → unit test,
