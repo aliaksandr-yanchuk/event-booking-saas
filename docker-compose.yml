@@ -45,6 +45,8 @@ services:
       target: runner
     environment:
       DATABASE_URL: postgresql://app:app@db:5432/event_booking
+      # Production mode requires a secret for the links in emails; this one is for local use only.
+      BOOKING_LINK_SECRET: local-docker-only-secret
     ports:
       - "3000:3000"
     depends_on:
