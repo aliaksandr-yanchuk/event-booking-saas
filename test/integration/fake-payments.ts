@@ -22,6 +22,8 @@ export function createFakePayments() {
     },
     async expireCheckout(sessionId) {
       calls.expired.push(sessionId);
+      const paymentId = paid.get(sessionId);
+      return paymentId ? { completed: true, paymentId } : { completed: false };
     },
     async refund(paymentId, { idempotencyKey }) {
       calls.refunds.push({ paymentId, idempotencyKey });

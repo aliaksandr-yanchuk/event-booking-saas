@@ -22,12 +22,16 @@ export type CheckoutSession = { sessionId: string; url: string };
 
 export type CheckoutStatus = { paid: true; paymentId: string } | { paid: false };
 
+// completed: too late to expire, the customer has just paid. The caller then has a
+// payment to record (and, if it wanted to release the seats, to refund).
+export type ExpireCheckoutResult = { completed: false } | { completed: true; paymentId: string };
+
 export interface PaymentProvider {
   readonly name: "stripe" | "demo";
   createCheckout(request: CheckoutRequest): Promise<CheckoutSession>;
   getCheckoutStatus(sessionId: string): Promise<CheckoutStatus>;
   // Makes an unpaid checkout unusable, so a released hold cannot be paid afterwards.
-  expireCheckout(sessionId: string): Promise<void>;
+  expireCheckout(sessionId: string): Promise<ExpireCheckoutResult>;
   // idempotencyKey: retrying a refund (after a timeout, or a crash before the database
   // update) must not refund twice.
   refund(paymentId: string, options: { idempotencyKey: string }): Promise<void>;

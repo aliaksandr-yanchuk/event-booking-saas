@@ -1,7 +1,9 @@
 import { cancelBooking, createBooking } from "@/server/booking-service";
 import type { Db } from "@/server/db";
 import { confirmPayment, expireCheckout, startCheckout, syncCheckout } from "@/server/payment-service";
+import type Stripe from "stripe";
 import { CHECKOUT_TTL_MS, HOLD_TTL_MS } from "@/server/payments/provider";
+import { handleStripeEvent } from "@/server/payments/stripe-webhook";
 import { countAvailableSeats, getSeatMap } from "@/server/repositories/events";
 import {
   createEventWithSeats,
@@ -356,5 +358,94 @@ describe("syncCheckout", () => {
     pay(booking.sessionId);
     expect(await syncCheckout(db, provider, command)).toMatchObject({ outcome: "CONFIRMED" });
     expect(await status(booking.reference)).toBe("CONFIRMED");
+  });
+});
+
+describe("handleStripeEvent", () => {
+  // The fields of a Stripe event that the handler reads.
+  const stripeEvent = (type: string, session: Partial<Stripe.Checkout.Session>) =>
+    ({
+      id: `evt_${Math.random()}`,
+      type,
+      data: { object: { object: "checkout.session", ...session } },
+    }) as Stripe.Event;
+
+  it("confirms a paid checkout, and ignores a second delivery of the same event", async () => {
+    const { holdAndCheckout, seats, provider, status, event } = await setup();
+    const booking = await holdAndCheckout([seats[0].id]);
+    const completed = stripeEvent("checkout.session.completed", {
+      id: booking.sessionId,
+      payment_status: "paid",
+      payment_intent: "pi_1",
+    });
+
+    expect(await handleStripeEvent(db, provider, completed)).toEqual({ eventId: event.id });
+    expect(await handleStripeEvent(db, provider, completed)).toEqual({ eventId: event.id });
+    expect(await status(booking.reference)).toBe("CONFIRMED");
+  });
+
+  it("waits for async_payment_succeeded when a delayed payment method completes unpaid", async () => {
+    const { holdAndCheckout, seats, provider, status } = await setup();
+    const booking = await holdAndCheckout([seats[0].id]);
+
+    await handleStripeEvent(
+      db,
+      provider,
+      stripeEvent("checkout.session.completed", { id: booking.sessionId, payment_status: "unpaid" }),
+    );
+    expect(await status(booking.reference)).toBe("PENDING");
+
+    await handleStripeEvent(
+      db,
+      provider,
+      stripeEvent("checkout.session.async_payment_succeeded", {
+        id: booking.sessionId,
+        payment_status: "paid",
+        payment_intent: "pi_1",
+      }),
+    );
+    expect(await status(booking.reference)).toBe("CONFIRMED");
+  });
+
+  it("releases the seats when the checkout expires", async () => {
+    const { holdAndCheckout, seats, provider, status, takenAt } = await setup();
+    const booking = await holdAndCheckout([seats[0].id]);
+
+    await handleStripeEvent(db, provider, stripeEvent("checkout.session.expired", { id: booking.sessionId }));
+
+    expect(await status(booking.reference)).toBe("EXPIRED");
+    expect(await takenAt(new Date())).toEqual([]);
+  });
+
+  it("ignores sessions it does not know and event types it does not handle", async () => {
+    const { provider } = await setup();
+
+    expect(
+      await handleStripeEvent(
+        db,
+        provider,
+        stripeEvent("checkout.session.completed", { id: "cs_other", payment_status: "paid", payment_intent: "pi_x" }),
+      ),
+    ).toBeNull();
+    expect(await handleStripeEvent(db, provider, stripeEvent("customer.created", {}))).toBeNull();
+  });
+});
+
+describe("cancelBooking while the customer is paying", () => {
+  it("records a payment that completed just before the hold was released, and refunds it", async () => {
+    const { holdAndCheckout, seats, provider, organization, pay, status, calls } = await setup();
+    const booking = await holdAndCheckout([seats[0].id]);
+    // Paid on the provider's page, but no webhook has arrived yet.
+    pay(booking.sessionId, "pi_just_now");
+
+    const result = await cancelBooking(db, provider, {
+      organizationId: organization.id,
+      reference: booking.reference,
+      customerEmail: customer.customerEmail,
+    });
+
+    expect(result).toMatchObject({ ok: true, refunded: true });
+    expect(await status(booking.reference)).toBe("CANCELLED");
+    expect(calls.refunds).toEqual([{ paymentId: "pi_just_now", idempotencyKey: expect.stringMatching(/^refund-/) }]);
   });
 });

@@ -7,6 +7,7 @@ import { seatLabel } from "@/lib/seats";
 import type { Db } from "@/server/db";
 import { isUniqueViolation } from "@/server/db-errors";
 import { activeSeatWhere, releaseStaleHolds } from "@/server/holds";
+import { confirmPayment } from "@/server/payment-service";
 import { HOLD_TTL_MS, type PaymentProvider } from "@/server/payments/provider";
 
 export type CreateBookingCommand = BookingInput & {
@@ -94,6 +95,12 @@ export async function createBooking(
 
   const alreadyTaken = seats.filter((seat) => seat.bookingSeats.length > 0).map((seat) => seat.id);
   if (alreadyTaken.length > 0) {
+    // A request with the same key may have committed since the check at the top; then
+    // the seats are taken by this very booking, and it is a retry, not a conflict.
+    if (idempotency) {
+      const previous = await findIdempotentBooking(db, idempotency);
+      if (previous) return previous;
+    }
     return { ok: false, code: "SEATS_TAKEN", takenSeatIds: alreadyTaken };
   }
 
@@ -222,7 +229,13 @@ export async function cancelBooking(
 
   if (booking.status === "PENDING" && booking.checkoutSessionId) {
     // Otherwise the customer could still pay for seats they just released.
-    await payments.expireCheckout(booking.checkoutSessionId);
+    const expired = await payments.expireCheckout(booking.checkoutSessionId);
+    if (expired.completed) {
+      // They paid a moment ago. Record the payment, then cancel the now confirmed
+      // booking, which refunds it.
+      await confirmPayment(db, payments, { sessionId: booking.checkoutSessionId, paymentId: expired.paymentId });
+      return cancelBooking(db, payments, command, options);
+    }
   }
   const refund = booking.status === "CONFIRMED" && booking.paymentId !== null;
   if (refund) {

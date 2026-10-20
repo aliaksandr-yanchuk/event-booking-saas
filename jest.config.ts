@@ -11,6 +11,8 @@ const config: Config = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   testMatch: ["<rootDir>/src/**/*.test.{ts,tsx}"],
   testPathIgnorePatterns: ["\\.int\\.test\\.ts$"],
+  // SWC rewrites "@/" in imports, but not in jest.mock() paths.
+  moduleNameMapper: { "^@/(.*)$": "<rootDir>/src/$1" },
   // The standalone build output contains a copy of package.json.
   modulePathIgnorePatterns: ["<rootDir>/.next/"],
   coverageProvider: "v8",

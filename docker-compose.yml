@@ -17,6 +17,13 @@ services:
       timeout: 3s
       retries: 20
 
+  # Stripe's official mock server: validates requests against Stripe's OpenAPI spec and
+  # answers with fixtures. The integration tests run the Stripe adapter against it.
+  stripe-mock:
+    image: stripe/stripe-mock:v0.206.0
+    ports:
+      - "12111:12111"
+
   # Production-like stack built from the Dockerfile:
   #   docker compose --profile app up --build
   # Migrations run first as a one-off job, like a release step on a container platform.

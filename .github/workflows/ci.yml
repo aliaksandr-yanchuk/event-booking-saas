@@ -29,7 +29,7 @@ jobs:
       - run: npm test -- --coverage
 
   integration:
-    name: Integration tests (PostgreSQL)
+    name: Integration tests (PostgreSQL, stripe-mock)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -44,8 +44,12 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 20
+      stripe-mock:
+        image: stripe/stripe-mock:v0.206.0
+        ports: ["12111:12111"]
     env:
       TEST_DATABASE_URL: postgresql://app:app@localhost:5432/event_booking_test
+      STRIPE_MOCK_URL: http://localhost:12111
       # Must differ from TEST_DATABASE_URL; the integration tests never touch it.
       DATABASE_URL: postgresql://app:app@localhost:5432/postgres
     steps:

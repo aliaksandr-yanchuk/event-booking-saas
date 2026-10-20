@@ -20,7 +20,11 @@ export const demoPaymentProvider: PaymentProvider = {
     return { paid: false };
   },
 
-  async expireCheckout() {},
+  // A demo checkout can only be paid through the demo page, which checks the booking's
+  // status first, so there is nothing to expire.
+  async expireCheckout() {
+    return { completed: false };
+  },
 
   async refund() {},
 };

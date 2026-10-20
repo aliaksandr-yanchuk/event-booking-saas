@@ -175,10 +175,15 @@ PENDING ──paid──▶ CONFIRMED ──cancel──▶ CANCELLED (refunded)
 ```
 
 The checkout sits behind a small `PaymentProvider` interface
-([`provider.ts`](src/server/payments/provider.ts)). Without Stripe keys (locally, in CI,
-or on a demo), a built-in demo checkout stands in for it. Its "Pay" button calls the same
-`confirmPayment()` as the Stripe webhook, so the E2E tests exercise the real flow after
-the payment.
+([`provider.ts`](src/server/payments/provider.ts)). With Stripe keys, it is Stripe
+Checkout ([`stripe-provider.ts`](src/server/payments/stripe-provider.ts)): the webhook
+verifies Stripe's signature on the raw body, and the page the customer returns to also
+asks Stripe about the session, so a slow webhook never leaves a paid customer looking at
+"awaiting payment". Without keys (locally, in CI, or on a demo), a built-in demo checkout
+stands in. Its "Pay" button calls the same `confirmPayment()` as the webhook, so the E2E
+tests run the real code after the payment. The Stripe adapter itself is tested against
+[stripe-mock](https://github.com/stripe/stripe-mock), Stripe's official mock server, which
+rejects any request that does not match Stripe's API.
 
 **Idempotency keys answer a different question than the seat constraint.** The constraint
 already stops a retried request from booking twice, but the retry would fail with
@@ -249,13 +254,13 @@ shell. An E2E test walks through the booking flow and fails on any CSP violation
 
 ## Testing
 
-| Suite         | Command                             | What it covers                                                                                                  |
-| ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Unit          | `npm test`                          | Pricing, validation, booking references, JSON-LD, the booking form component                                    |
-| Integration   | `npm run test:integration`          | Booking service against PostgreSQL: race condition, tenant isolation, cancellation, booking rules               |
-| E2E           | `npm run test:e2e`                  | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport                             |
-| API           | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation |
-| Accessibility | `npx playwright test accessibility` | axe-core WCAG 2.2 A/AA scan of every page type, in light and dark mode, including the form with errors          |
+| Suite         | Command                             | What it covers                                                                                                                                      |
+| ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit          | `npm test`                          | Pricing, validation, booking references, JSON-LD, the booking form component                                                                        |
+| Integration   | `npm run test:integration`          | Booking and payment services against PostgreSQL: races, holds, late payments, refunds, tenancy, rate limits; the Stripe adapter against stripe-mock |
+| E2E           | `npm run test:e2e`                  | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport                                                                 |
+| API           | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation                                     |
+| Accessibility | `npx playwright test accessibility` | axe-core WCAG 2.2 A/AA scan of every page type, in light and dark mode, including the form with errors                                              |
 
 CI runs all three on every pull request, plus lint, type check and a Docker build.
 In CI, the E2E tests run against the production build (`node .next/standalone/server.js`).
@@ -287,6 +292,21 @@ code also runs as the Docker image on any container platform.
 - A scheduled workflow ([`reset-demo.yml`](.github/workflows/reset-demo.yml)) re-seeds the
   demo database every Monday, so the events stay upcoming and visitor bookings are cleared.
 
+### Stripe (optional)
+
+Without Stripe keys, the demo checkout is used. To take test payments with Stripe Checkout:
+
+1. In the Stripe dashboard (test mode), add a webhook endpoint for
+   `https://<your domain>/api/webhooks/stripe` with the events
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed` and `checkout.session.expired`.
+2. Set `STRIPE_SECRET_KEY` (a test key; live keys are refused) and `STRIPE_WEBHOOK_SECRET`
+   (the endpoint's signing secret) in the Vercel project, and redeploy.
+3. Pay with Stripe's test card `4242 4242 4242 4242`, any future date and any CVC.
+
+Locally, `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints a webhook
+secret to use instead.
+
 ## Running locally
 
 Requirements: Node.js 24 (`nvm use`), Docker.
@@ -294,7 +314,7 @@ Requirements: Node.js 24 (`nvm use`), Docker.
 ```bash
 npm install
 cp .env.example .env
-npm run db:up            # PostgreSQL in Docker (also creates the test database)
+npm run db:up            # PostgreSQL (also creates the test database) and stripe-mock in Docker
 npx prisma migrate deploy
 npm run db:seed          # two demo organizers with events
 npm run dev              # http://localhost:3000
@@ -340,5 +360,4 @@ the test suites, not by assuming the generated code was correct.
 ## Possible next steps
 
 - Organizer dashboard with authentication (sales per event, booking list, check-in)
-- Payment integration (Stripe) with idempotent webhooks
 - Email confirmation with a signed management link
