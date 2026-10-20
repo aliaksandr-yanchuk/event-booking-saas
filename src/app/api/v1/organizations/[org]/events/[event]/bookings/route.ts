@@ -1,12 +1,13 @@
 import { revalidateTag } from "next/cache";
 import { parseBookingInput } from "@/lib/booking-input";
 import { parseIdempotencyKey } from "@/lib/idempotency-key";
-import { problem, readJson } from "@/server/api/problem";
+import { problem, rateLimited, readJson } from "@/server/api/problem";
 import { resolveEvent } from "@/server/api/resolve";
 import { BookingCreatedResponse, jsonResponse } from "@/server/api/schemas";
 import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
+import { limitBooking } from "@/server/rate-limit";
 
 /**
  * POST /api/v1/organizations/{org}/events/{event}/bookings
@@ -15,12 +16,18 @@ import { db } from "@/server/db";
  *
  * 201 with the booking and a Location header, or a problem response:
  * 400 invalid body or key, 404 unknown organizer/event, 409 seats already booked,
- * 415 not JSON, 422 the request is valid JSON but breaks a booking rule
+ * 415 not JSON, 429 too many attempts from this client, 422 the request is valid JSON but breaks a booking rule
  * (or reuses an idempotency key for a different request).
  * A retry with the same key gets the original 201 again, marked Idempotent-Replayed.
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/v1/organizations/[org]/events/[event]/bookings">) {
   const { org, event: eventSlug } = await ctx.params;
+
+  // Counted before anything else, so invalid requests cannot be sent at full speed either.
+  const limit = await limitBooking(request.headers);
+  if (!limit.allowed) {
+    return rateLimited(limit.retryAfterSeconds);
+  }
 
   const idempotencyKey = parseIdempotencyKey(request.headers.get("idempotency-key"));
   if (!idempotencyKey.ok) {

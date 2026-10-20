@@ -36,6 +36,7 @@ export const PROBLEM_CODES = [
   "ALREADY_CANCELLED",
   "EVENT_STARTED",
   "IDEMPOTENCY_KEY_REUSED",
+  "RATE_LIMITED",
 ] as const;
 
 export const Problem = z

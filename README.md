@@ -135,6 +135,10 @@ curl -s -X POST …/bookings -H 'Idempotency-Key: "8e03978e-40d5-43e8-bc93-6894a
 Reusing a key for a different request (other seats or customer) is a client bug and gets
 `422 IDEMPOTENCY_KEY_REUSED`.
 
+**Rate limits.** Booking and cancelling are limited per client address, and cancelling
+also per booking. Over the limit, the API answers `429 RATE_LIMITED` with `Retry-After`,
+and the forms show "Try again in N minutes".
+
 ## Design decisions
 
 **Double booking is impossible by construction.** `booking_seats.seat_id` has a UNIQUE
@@ -178,6 +182,16 @@ rarely change; platforms cache previews for days, so "seats left" would quickly 
 **Booking pages are private.** Booking references come from a CSPRNG (31⁸ combinations),
 the confirmation page is `noindex` and does not show the email address, and cancelling
 needs the email as well as the reference.
+
+**Rate limits live in PostgreSQL.** The counters are one table and one atomic
+`INSERT … ON CONFLICT DO UPDATE` per check ([`rate-limit.ts`](src/server/rate-limit.ts)),
+so all server instances share them and the demo needs no Redis. An integration test sends
+20 hits at once and checks that exactly the limit gets through. The per-booking limit on
+cancelling matters most: the booking email is the secret there, and the limit stops
+guessing it even from many addresses. The client address comes from `X-Forwarded-For`,
+which Vercel overwrites, so clients cannot fake it; a self-hosted deployment needs a
+proxy that does the same. The E2E suite gives each test its own address, so tests do not
+use up each other's budget.
 
 **Security headers without giving up static rendering.** Every response carries a
 Content Security Policy, HSTS, `nosniff` and a strict referrer policy

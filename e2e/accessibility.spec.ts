@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { BookingCreatedResponse, EventDetailResponse } from "../src/server/api/schemas";
 
 // Automated WCAG 2.2 A/AA checks with axe-core, in light and dark mode, on every page type.

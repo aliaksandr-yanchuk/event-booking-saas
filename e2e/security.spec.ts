@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 const EVENT_PAGE = "/harbor-hall/events/midnight-jazz-session";
 

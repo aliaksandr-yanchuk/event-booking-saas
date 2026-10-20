@@ -23,13 +23,31 @@ const TITLES: Record<ProblemCode, string> = {
   ALREADY_CANCELLED: "The booking is already cancelled",
   EVENT_STARTED: "The event has already started",
   IDEMPOTENCY_KEY_REUSED: "This idempotency key was used for a different request",
+  RATE_LIMITED: "Too many requests",
 };
 
-export function problem(status: number, code: ProblemCode, detail?: string, extras: ProblemExtras = {}): Response {
+export function problem(
+  status: number,
+  code: ProblemCode,
+  detail?: string,
+  extras: ProblemExtras = {},
+  headers: Record<string, string> = {},
+): Response {
   return jsonResponse(
     Problem,
     { type: `about:blank#${code}`, title: TITLES[code], status, code, ...(detail && { detail }), ...extras },
-    { status, headers: { "Content-Type": "application/problem+json" } },
+    { status, headers: { ...headers, "Content-Type": "application/problem+json" } },
+  );
+}
+
+/** 429 with Retry-After, so well-behaved clients know when to try again. */
+export function rateLimited(retryAfterSeconds: number): Response {
+  return problem(
+    429,
+    "RATE_LIMITED",
+    `Too many attempts from this client. Try again in ${retryAfterSeconds} seconds.`,
+    {},
+    { "Retry-After": String(retryAfterSeconds) },
   );
 }
 

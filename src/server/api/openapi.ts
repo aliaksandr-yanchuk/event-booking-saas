@@ -12,6 +12,11 @@ const json = (id: string, contentType = "application/json") => ({ content: { [co
 
 const problemResponse = (description: string) => ({ description, ...json("Problem", "application/problem+json") });
 
+const rateLimitedResponse = {
+  ...problemResponse("Too many attempts from this client, or for this booking (RATE_LIMITED)"),
+  headers: { "Retry-After": { description: "Seconds until the next attempt is allowed", schema: { type: "integer" } } },
+};
+
 const pathParam = (name: string, example: string, pattern?: string) => ({
   name,
   in: "path",
@@ -92,6 +97,7 @@ export function buildOpenApiDocument() {
               "A booking rule was broken (TOO_MANY_SEATS, INVALID_SEATS, EVENT_NOT_BOOKABLE), " +
                 "or the Idempotency-Key was used for a different request (IDEMPOTENCY_KEY_REUSED)",
             ),
+            429: rateLimitedResponse,
           },
         },
       },
@@ -119,6 +125,7 @@ export function buildOpenApiDocument() {
             409: problemResponse("Already cancelled (ALREADY_CANCELLED)"),
             415: problemResponse("Body is not application/json"),
             422: problemResponse("The event has started (EVENT_STARTED)"),
+            429: rateLimitedResponse,
           },
         },
       },

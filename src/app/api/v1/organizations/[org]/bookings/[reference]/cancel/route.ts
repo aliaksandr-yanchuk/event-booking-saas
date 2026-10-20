@@ -1,10 +1,11 @@
 import { revalidateTag } from "next/cache";
-import { problem, readJson } from "@/server/api/problem";
+import { problem, rateLimited, readJson } from "@/server/api/problem";
 import { BookingCancelledResponse, CancelBookingRequest, jsonResponse } from "@/server/api/schemas";
 import { cancelBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
 import { getOrganization } from "@/server/queries";
+import { limitCancellation } from "@/server/rate-limit";
 
 /**
  * POST /api/v1/organizations/{org}/bookings/{reference}/cancel
@@ -33,6 +34,12 @@ export async function POST(
   const organization = await getOrganization(org);
   if (!organization) {
     return problem(404, "NOT_FOUND", "No booking with this reference and email.");
+  }
+
+  // Limited per client and per booking: the email is the secret here, so guessing it is throttled.
+  const limit = await limitCancellation(request.headers, { organizationId: organization.id, reference });
+  if (!limit.allowed) {
+    return rateLimited(limit.retryAfterSeconds);
   }
 
   const result = await cancelBooking(db, {

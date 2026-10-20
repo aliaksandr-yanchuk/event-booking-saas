@@ -170,3 +170,13 @@ model IdempotencyKey {
   @@id([organizationId, key])
   @@map("idempotency_keys")
 }
+
+// Fixed-window rate limit counters, one row per limited key (for example
+// "booking:ip:203.0.113.7"). See src/server/rate-limit.ts.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+
+  @@map("rate_limits")
+}

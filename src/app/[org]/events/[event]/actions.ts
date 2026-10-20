@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { parseBookingForm, type BookingFieldErrors } from "@/lib/booking-input";
 import { parseIdempotencyKey } from "@/lib/idempotency-key";
@@ -8,6 +9,7 @@ import { createBooking } from "@/server/booking-service";
 import { cacheTags } from "@/server/cache-tags";
 import { db } from "@/server/db";
 import { getOrganization, getPublicEvent } from "@/server/queries";
+import { limitBooking, retryAfterMessage } from "@/server/rate-limit";
 
 export type BookingFormState = {
   status: "idle" | "error";
@@ -31,6 +33,11 @@ export async function bookSeatsAction(
     customerName: String(formData.get("customerName") ?? ""),
     customerEmail: String(formData.get("customerEmail") ?? ""),
   };
+
+  const limit = await limitBooking(await headers());
+  if (!limit.allowed) {
+    return { status: "error", message: retryAfterMessage(limit.retryAfterSeconds), values };
+  }
 
   // One key per rendered form (see page.tsx): a double submit, or a resubmit after the
   // response was lost, lands on the same booking instead of failing with "seats taken".

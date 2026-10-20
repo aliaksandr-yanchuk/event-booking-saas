@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
+import { expect, test, type APIRequestContext, type APIResponse } from "./fixtures";
 import type { z } from "zod";
 import {
   BookingCancelledResponse,
@@ -143,6 +143,23 @@ test("a retry with the same Idempotency-Key returns the original booking", async
     code: "VALIDATION_FAILED",
     errors: { "Idempotency-Key": expect.any(String) },
   });
+});
+
+test("slows down a client that sends too many booking requests", async ({ request }) => {
+  // Invalid bodies: they are counted too (the limit is checked first), and book nothing.
+  const attempt = () => request.post(`${EVENT}/bookings`, { data: {} });
+  for (let i = 0; i < 20; i++) {
+    expect((await attempt()).status()).toBe(400);
+  }
+
+  const limited = await attempt();
+  expect(limited.status()).toBe(429);
+  expect(Number(limited.headers()["retry-after"])).toBeGreaterThan(0);
+  expect((await parse(limited, Problem)).code).toBe("RATE_LIMITED");
+
+  // Another client is not affected.
+  const other = await request.post(`${EVENT}/bookings`, { data: {}, headers: { "X-Forwarded-For": "192.0.2.1" } });
+  expect(other.status()).toBe(400);
 });
 
 test("rejects invalid bodies with field errors (RFC 9457)", async ({ request }) => {

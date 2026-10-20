@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 
 // Both projects (desktop, mobile) run against the same seeded database,
 // so each one books seats in its own row to stay independent.
