@@ -42,7 +42,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </Link>
           </div>
         </header>
-        <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:py-12">
+        {/*
+          At least one screen tall: pages stream their content in after a short skeleton, and
+          a footer visible on the first paint would jump down when it arrives (layout shift).
+        */}
+        <main id="main" className="mx-auto min-h-svh w-full max-w-5xl flex-1 px-4 py-8 sm:py-12">
           {children}
         </main>
         <footer className="border-t border-border py-6 text-center text-sm text-muted">
