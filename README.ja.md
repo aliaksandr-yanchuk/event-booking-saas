@@ -15,18 +15,18 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 (デモデータは毎週月曜にリセットされます。名前とメールアドレスは架空のもので構いません) ·
 主催者ダッシュボード: [`/login`](https://event-booking-saas.vercel.app/login)(デモアカウントはログイン画面に表示)
 
-![予約の流れ: 席の選択、デモ決済画面での支払い、QR コード付きのチケット](docs/demo.webp)
+![予約の流れ: 席の選択、デモ決済画面での支払い、QR コード付きのチケット](docs/ja/demo.webp)
 
 <details>
 <summary>その他のスクリーンショット: イベントページ、スマホ表示、チケット、主催者ダッシュボード</summary>
 
-![座席表のあるイベントページ](docs/event-page-desktop.png)
+![座席表のあるイベントページ](docs/ja/event-page-desktop.png)
 
-![スマホで見たイベントページ](docs/event-page-mobile.png)
+![スマホで見たイベントページ](docs/ja/event-page-mobile.png)
 
-![チケットの QR コードとデモ受信箱がある予約確認ページ](docs/booking-ticket.png)
+![チケットの QR コードとデモ受信箱がある予約確認ページ](docs/ja/booking-ticket.png)
 
-![イベントごとの売上が見える主催者ダッシュボード](docs/dashboard.png)
+![イベントごとの売上が見える主催者ダッシュボード](docs/ja/dashboard.png)
 
 </details>
 
@@ -422,9 +422,9 @@ docker compose --profile app up --build
 
 ### スクリーンショット
 
-`docs/` の画像は、シードしたばかりのデータと本番ビルドに対して
-[`scripts/capture-docs.mjs`](scripts/capture-docs.mjs) を実行して作っているため、UI を変えた後に
-作り直せます。
+`docs/`(英語)と `docs/ja/`(日本語。この README で使用)の画像は、シードしたばかりのデータと
+本番ビルドに対して [`scripts/capture-docs.mjs`](scripts/capture-docs.mjs) を実行して作っているため、
+UI を変えた後に作り直せます。
 
 ## プロジェクト構成
 

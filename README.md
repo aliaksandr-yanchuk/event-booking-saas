@@ -443,9 +443,9 @@ docker compose --profile app up --build
 
 ### Screenshots
 
-The images in `docs/` come from [`scripts/capture-docs.mjs`](scripts/capture-docs.mjs),
-run against the production build with freshly seeded data, so they can be regenerated
-after UI changes.
+The images in `docs/` (English) and `docs/ja/` (Japanese, used by the Japanese README)
+come from [`scripts/capture-docs.mjs`](scripts/capture-docs.mjs), run against the
+production build with freshly seeded data, so they can be regenerated after UI changes.
 
 ## Project structure
 
