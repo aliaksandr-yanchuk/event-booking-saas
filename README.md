@@ -13,12 +13,18 @@ API: [`/api/v1/openapi.json`](https://event-booking-saas.vercel.app/api/v1/opena
 (demo data, reset every Monday; use any made-up name and email) ·
 Organizer dashboard: [`/login`](https://event-booking-saas.vercel.app/login), demo accounts listed there
 
-![Event page with seat map](docs/event-page-desktop.png)
+![Booking walkthrough: choosing seats, paying on the demo checkout, and the ticket with its QR code](docs/demo.webp)
 
 <details>
-<summary>Mobile view</summary>
+<summary>More screenshots: event page, phone, ticket, organizer dashboard</summary>
+
+![Event page with seat map](docs/event-page-desktop.png)
 
 ![Event page on a phone](docs/event-page-mobile.png)
+
+![Booking confirmation with the ticket QR code and the demo inbox](docs/booking-ticket.png)
+
+![Organizer dashboard with sales per event](docs/dashboard.png)
 
 </details>
 
@@ -53,15 +59,20 @@ flowchart LR
   Browser -->|"GET pages"| Pages["Server Components<br/>(src/app)"]
   Browser -->|"form submit"| Actions["Server Actions<br/>(actions.ts)"]
   Client["API clients"] -->|"JSON over HTTP"| API["REST API<br/>src/app/api/v1"]
-  Pages --> Queries["Cached reads<br/>src/server/queries.ts<br/>'use cache' + cacheTag"]
-  Pages -->|"seat map, never cached"| Repos
-  API --> Queries
+  Stripe(["Stripe"]) -->|"webhook"| Webhook["Webhook<br/>src/app/api/webhooks"]
+  Pages --> Queries["Cached reads<br/>src/server/queries.ts"]
+  Pages -->|"dashboard"| DAL["Data access layer<br/>src/server/auth/dal.ts"]
   API --> Service
+  Actions --> Service["Booking & payment services<br/>src/server/*-service.ts"]
+  Webhook --> Service
+  DAL --> Repos
   Queries --> Repos["Repositories<br/>src/server/repositories"]
-  Actions --> Service["Booking service<br/>src/server/booking-service.ts"]
-  Actions -->|"updateTag after a booking"| Queries
-  Repos --> DB[(PostgreSQL)]
-  Service -->|"transaction"| DB
+  Service -->|"checkout, refund"| Payments["PaymentProvider<br/>Stripe or demo"]
+  Service -->|"transaction<br/>+ outbox row"| DB[(PostgreSQL)]
+  Repos --> DB
+  Actions -.->|"after()"| Outbox["Email outbox<br/>src/server/email"]
+  Outbox --> DB
+  Outbox -->|"send"| Mail(["Resend or demo inbox"])
 ```
 
 The web pages and the REST API are two entry points into the same service layer:
@@ -297,13 +308,13 @@ shell. An E2E test walks through the booking flow and fails on any CSP violation
 
 | Suite         | Command                             | What it covers                                                                                                                                      |
 | ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit          | `npm test`                          | Pricing, validation, booking references, JSON-LD, the booking form component                                                                        |
+| Unit          | `npm test`                          | Pricing, validation, references, JSON-LD, passwords, signed links, CSV, email templates, the booking form with its live seat map, the webhook route |
 | Integration   | `npm run test:integration`          | Booking and payment services against PostgreSQL: races, holds, late payments, refunds, tenancy, rate limits; the Stripe adapter against stripe-mock |
-| E2E           | `npm run test:e2e`                  | Full booking and cancellation flows in Chromium, on a desktop and a mobile viewport                                                                 |
+| E2E           | `npm run test:e2e`                  | Booking, payment, release, refund, email and dashboard flows in Chromium, on a desktop and a mobile viewport, against the production build          |
 | API           | `npm run test:e2e -- --project=api` | REST API contract over real HTTP: status codes, headers, Problem Details, concurrent bookings, tenant isolation                                     |
 | Accessibility | `npx playwright test accessibility` | axe-core WCAG 2.2 A/AA scan of every page type, in light and dark mode, including the form with errors                                              |
 
-CI runs all three on every pull request, plus lint, type check and a Docker build.
+CI runs all of them on every pull request, plus lint, formatting, type check and a Docker build.
 In CI, the E2E tests run against the production build (`node .next/standalone/server.js`).
 
 ### Bugs the tests found during development
@@ -320,6 +331,34 @@ In CI, the E2E tests run against the production build (`node .next/standalone/se
    uses the documented `@tailwindcss/postcss` setup.
 4. **Stale cache after re-seeding.** Re-seeding behind a running server left cached pages
    pointing at deleted rows. The seed now uses fixed IDs.
+5. **A double submit could report "seats taken" for the customer's own booking.** The
+   concurrency test for idempotency keys started failing once seat holds made the
+   transaction a little longer: a duplicate request checked the key before the first one
+   committed, then saw the seats taken. It now checks the key again before answering
+   `SEATS_TAKEN`.
+6. **The API reported a hold's expiry from before the checkout renewed it.** An API test
+   compared `expiresAt` in the booking response with the booking itself and found them
+   14 ms apart.
+7. **Partial Prefetching refused the session check.** The E2E server log showed Next.js
+   rejecting `new Date()` while prerendering the dashboard's App Shell; the session check
+   now opts out of prerendering with `connection()`.
+
+### Performance
+
+Lighthouse on the event page (production build, Lighthouse 12 defaults; mobile uses
+simulated slow 4G and a mid-range phone):
+
+| Device  | Performance | Accessibility | Best practices | SEO | LCP   | CLS | TBT   |
+| ------- | ----------- | ------------- | -------------- | --- | ----- | --- | ----- |
+| Mobile  | 97          | 100           | 100            | 91  | 2.7 s | 0   | 50 ms |
+| Desktop | 100         | 100           | 100            | 91  | 0.6 s | 0   | 0 ms  |
+
+SEO is 91 because of streaming metadata: Next.js 16 does not hold the page back until
+`generateMetadata` finishes, and appends the tags to `<body>` for clients that run
+JavaScript (Googlebot does), while crawlers that cannot (Slack, Facebook) get them in
+`<head>`. Lighthouse only looks in `<head>`. Turning streaming off would trade a real
+benefit for the score. Layout shift was 0.084 before `<main>` got a minimum height of
+one screen: the footer jumped when the streamed event replaced its shorter skeleton.
 
 ## Deployment
 
@@ -384,6 +423,12 @@ Production-like stack in Docker (migrations run as a one-off job before the app 
 docker compose --profile app up --build
 ```
 
+### Screenshots
+
+The images in `docs/` come from [`scripts/capture-docs.mjs`](scripts/capture-docs.mjs),
+run against the production build with freshly seeded data, so they can be regenerated
+after UI changes.
+
 ## Project structure
 
 ```
@@ -401,6 +446,7 @@ src/server/payments/     payment provider interface, Stripe and demo providers, 
 src/proxy.ts             redirects requests without a session cookie to the login page
 test/integration/        database test setup and factories
 e2e/                     Playwright tests
+scripts/                 screenshot capture for the docs
 ```
 
 ## Built with AI assistance
